@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Roblox Sales Tracker",
+  "version": "3.4",
+  "permissions": ["storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://www.roblox.com/*",
+    "https://economy.roblox.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.roblox.com/communities/configure*"],
+      "css": ["styles.css"],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "donate.html",
+        "help.html",
+        "settings.html",
+        "settings.js",
+        "analytics.html",
+        "analytics.css",
+        "analytics.js",
+        "background.js"
+      ],
+      "matches": ["https://www.roblox.com/*"]
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roblox Sales Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="rbx-sales-tracker-minimal" style="position: fixed; top: 100px; right: 50px; width: 320px; background: #1b1d1f; border-radius: 6px; color: #ffffff; padding: 20px; z-index: 100000; font-family: sans-serif; box-shadow: 0 4px 15px rgba(0,0,0,0.6);">
+        <a href="help.html" target="_blank" title="What is this?" style="position: absolute; top: 12px; right: 12px; text-decoration: none; color: #aaa; font-size: 20px; background: #252729; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer; transition: background 0.2s;">
+            <span style="font-weight: bold;">?</span>
+        </a>
+        <div style="font-size: 22px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 8px;">Roblox Sales Tracker</div>
+        <div style="margin-bottom: 20px; background: #252729; padding: 10px; border-radius: 4px;">
+            <div style="font-size: 14px; color: #aaa; text-transform: uppercase;">Today (01.03.2026)</div>
+            <div style="font-size: 20px; margin-top: 5px;">Sales: <b>0</b></div>
+            <div style="font-size: 20px; color: #00b06f;">R$ 0</div>
+        </div>
+        <div style="margin-bottom: 25px;">
+            <div style="font-size: 14px; color: #aaa; text-transform: uppercase;">Past 7 Days</div>
+            <div style="font-size: 18px; margin-top: 5px;">Total Sales: 0</div>
+            <div style="font-size: 18px;">Estimated: <span style="color: #ffb800;">R$ 0</span></div>
+        </div>
+         <div style="margin-top: 25px;">
+            <div style="font-size: 14px; color: #aaa; text-transform: uppercase;">All Time</div>
+            <div style="font-size: 18px; margin-top: 5px;">Total Sales: 0</div>
+            <div style="font-size: 18px;">Estimated: <span style="color: #ffb800;">R$ 0</span></div>
+        </div>
+        <div id="reset-tracker" style="color: #ffffff; font-size: 18px; cursor: pointer; display: inline-block; opacity: 0.8;">reset</div>
+    </div>
+    <script src="content.js"></script>
+</body>
+</html>

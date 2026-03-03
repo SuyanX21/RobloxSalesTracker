@@ -1,0 +1,39 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Tracker Settings</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body { background: #181a1b; color: #fff; font-family: sans-serif; margin: 0; padding: 0; }
+        .container { max-width: 500px; margin: 40px auto; background: #232526; border-radius: 8px; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        h1 { font-size: 1.7em; margin-bottom: 18px; }
+        label { display: block; margin-top: 18px; font-size: 1em; }
+        input[type="checkbox"] { margin-right: 8px; }
+        select { padding: 8px 12px; background: #1b1d1f; color: #fff; border: 1px solid #393b3d; border-radius: 4px; font-size: 1em; }
+        button { margin-top: 28px; padding: 10px 22px; background: #ffb800; border: none; border-radius: 6px; color: #000; font-weight: bold; font-size: 1em; cursor: pointer; }
+        button:hover { background: #ffa500; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sales Tracker Settings</h1>
+        <form id="settings-form">
+            <label><input type="checkbox" id="showNotifications"> Show notifications for new sales</label>
+            <label><input type="checkbox" id="darkMode"> Enable dark mode</label>
+            <label><input type="checkbox" id="showConversion"> Show real money conversion</label>
+            <label style="margin-top:10px;">Currency:
+                <select id="currency">
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (EUR)</option>
+                </select>
+            </label>
+            <button type="submit">Save Settings</button>
+        </form>
+        <div id="status" style="margin-top:18px; color:#ffb800;"></div>
+    </div>
+    <script src="settings.js"></script>
+</body>
+</html>
+

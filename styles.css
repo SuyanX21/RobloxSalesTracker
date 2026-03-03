@@ -1,0 +1,210 @@
+/* Old Dashboard Styles */
+#rbx-sales-dashboard {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    width: 220px;
+    background: #232527;
+    border: 1px solid #393b3d;
+    border-radius: 8px;
+    color: white;
+    font-family: Arial, sans-serif;
+    padding: 12px;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.rbx-dash-header {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #393b3d;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin: 5px 0;
+}
+
+.green {
+    color: #00b06f;
+    font-weight: bold;
+}
+
+.highscore-box {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #393b3d;
+    text-align: center;
+    font-size: 12px;
+    color: #ffb800;
+}
+
+/* salestrack Overlay Styles */
+.salestrack-overlay-body {
+    padding: 0;
+    color: #ffffff;
+}
+
+.salestrack-description {
+    font-size: 14px;
+    color: #aaa;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+.salestrack-action-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.salestrack-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.salestrack-stat-item {
+    background: #232527;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #393b3d;
+}
+
+.centered-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.salestrack-stat-label {
+    display: block;
+    font-size: 12px;
+    color: #aaa;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.salestrack-stat-value {
+    display: block;
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.icon-robux-16x16 {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><text x="2" y="13" font-size="12" fill="gold" font-weight="bold">R$</text></svg>') no-repeat center;
+    background-size: contain;
+}
+
+.salestrack-breakdown-section {
+    margin-bottom: 12px;
+    border-top: 1px solid #393b3d;
+    padding-top: 12px;
+}
+
+.salestrack-breakdown-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0 0;
+}
+
+.salestrack-breakdown-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px;
+    background: #232527;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    font-size: 12px;
+    border: 1px solid #393b3d;
+}
+
+.salestrack-breakdown-amount {
+    flex: 1;
+    color: #aaa;
+    font-size: 12px;
+}
+
+.salestrack-breakdown-count {
+    color: #00b06f;
+    font-weight: bold;
+    margin: 0 8px;
+    font-size: 11px;
+}
+
+.salestrack-breakdown-price {
+    color: #ffb800;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.salestrack-divider {
+    height: 1px;
+    background: #393b3d;
+    margin: 12px 0;
+}
+
+.salestrack-status-content {
+    padding: 8px 0;
+}
+
+.salestrack-status-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.salestrack-status-text {
+    color: #aaa;
+    font-size: 13px;
+}
+
+.salestrack-rate-limit-text {
+    color: #ff6b6b;
+}
+
+/* Text Utility Classes */
+.text-secondary {
+    color: #aaa;
+}
+
+.text-caption-body {
+    font-size: 12px;
+}
+
+.text-body {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.text-error {
+    color: #ff6b6b;
+    font-size: 13px;
+}
+
+
+/* Button Styles */
+.btn-growth-md {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Content Top Helper */
+.content-top {
+    margin-top: 8px;
+}

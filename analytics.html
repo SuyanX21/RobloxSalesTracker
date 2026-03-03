@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>salestrack Analytics Dashboard</title>
+    <link rel="stylesheet" href="analytics.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <h2>salestrack BI</h2>
+        <p class="subtitle">Standalone Roblox sales intelligence dashboard.</p>
+
+        <div class="line"></div>
+
+        <div class="button-row">
+            <button class="primary" id="fetchLatestBtn">Fetch Latest</button>
+            <button class="ghost" id="exportCsvBtn">Export CSV</button>
+        </div>
+        <div class="status" id="fetchStatus"></div>
+
+        <div class="line"></div>
+
+        <label for="assetSearch">Asset Search</label>
+        <input class="input" id="assetSearch" type="text" placeholder="Filter assets by name...">
+
+        <label style="display:block; margin-top:10px;">
+            <input type="checkbox" id="whalesOnly"> Whale assets only
+        </label>
+
+        <div style="margin-top:12px; color: var(--muted); font-size: 12px;">
+            Selected assets
+            <span class="pill" id="assetSelectionCount">All</span>
+        </div>
+        <div class="filter-list" id="assetFilters"></div>
+
+        <div class="line"></div>
+
+        <label for="jsonInput">Paste Transaction JSON Array</label>
+        <textarea class="textarea" id="jsonInput" placeholder='[{"created":"2026-03-03T10:00:00Z","currency":{"amount":100},"details":{"name":"Asset Name","id":123}}]'></textarea>
+        <button class="ghost" id="loadJsonBtn" style="margin-top:8px;">Load JSON</button>
+        <div class="status" id="jsonStatus"></div>
+    </aside>
+
+    <main class="main">
+        <section class="panel">
+            <h1>Business Intelligence Dashboard</h1>
+            <p class="subtitle">
+                Metrics are computed from <code>localStorage['salestrack_cache']</code> plus any loaded/fetched data.
+            </p>
+        </section>
+
+        <section class="stats-ribbon" id="statsRibbon"></section>
+
+        <section class="layout-2">
+            <div class="panel">
+                <h3>Revenue Time-Series (30 Days)</h3>
+                <p class="subtitle">Gross Robux earned per day.</p>
+                <div class="chart-wrap">
+                    <canvas id="revenueChart"></canvas>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Temporal Heatmap</h3>
+                <p class="subtitle">Sales frequency by UTC hour.</p>
+                <div id="goldenHourText" class="subtitle" style="margin-top:8px;"></div>
+                <div class="heatmap-grid" id="heatmapGrid"></div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h3>Asset Matrix</h3>
+            <p class="subtitle">Sortable revenue table with velocity and market share.</p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><button class="sort-btn" data-sort="assetName">Asset Name</button></th>
+                            <th><button class="sort-btn" data-sort="unitsSold">Units Sold</button></th>
+                            <th><button class="sort-btn" data-sort="grossRobux">Gross Robux</button></th>
+                            <th><button class="sort-btn" data-sort="netRobux">Net Robux (70%)</button></th>
+                            <th><button class="sort-btn" data-sort="velocityPct">Velocity</button></th>
+                            <th><button class="sort-btn" data-sort="marketSharePct">Market Share</button></th>
+                            <th>Trend</th>
+                            <th>Pareto</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assetTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="analytics.js"></script>
+</body>
+</html>
