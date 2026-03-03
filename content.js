@@ -115,13 +115,11 @@ function initSalesTracker() {
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                // Reset today counter if it's a new day
                 const today = new Date().toDateString();
                 if (parsed.lastResetDate !== today) {
                     parsed.today = { count: 0, robux: 0 };
                     parsed.lastResetDate = today;
                 }
-                // Always reset isScanning to false - previous scans are no longer running
                 parsed.isScanning = false;
                 state = { ...state, ...parsed };
             } catch (error) {
@@ -129,6 +127,7 @@ function initSalesTracker() {
             }
         }
     }
+    
     // Reset state helper
     function resetState() {
         state = {
@@ -145,11 +144,11 @@ function initSalesTracker() {
             totalPending: { count: 0, robux: 0 },
         };
     }
+    
     // Save state to localStorage
     function saveState() {
         localStorage.setItem(`sales_tracker_${groupId}`, JSON.stringify(state));
         
-        // Also save to chrome.storage.local so background script can find group IDs
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.set({
                 [`sales_tracker_${groupId}`]: state
@@ -157,11 +156,10 @@ function initSalesTracker() {
         }
     }
 
-    // Save transactions for analytics dashboard (in salestrack_cache format)
+    // Save transactions for analytics dashboard
     function saveTransactionsForAnalytics() {
         if (collectedTransactions.length === 0) return;
         
-        // Use chrome.storage.local which is shared across the extension
         var storageKey = 'salestrack_cache';
         
         function doSave(existingData) {
@@ -175,7 +173,6 @@ function initSalesTracker() {
                 }
             }
             
-            // Merge transactions (avoid duplicates by id)
             var merged = collectedTransactions.slice();
             var existingIds = new Set(collectedTransactions.map(function(tx) { return tx.id; }));
             for (var i = 0; i < existingTx.length; i++) {
@@ -185,10 +182,7 @@ function initSalesTracker() {
                 }
             }
             
-            // Sort by created date descending (newest first)
             merged.sort(function(a, b) { return new Date(b.created) - new Date(a.created); });
-            
-            // Keep max 10000 transactions to prevent storage overflow
             var trimmed = merged.slice(0, 10000);
             
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
@@ -196,7 +190,6 @@ function initSalesTracker() {
                     console.log('Sales Tracker: Saved', trimmed.length, 'transactions to salestrack_cache for analytics');
                 });
             } else {
-                // Fallback to localStorage
                 try {
                     localStorage.setItem('salestrack_cache', JSON.stringify(trimmed));
                     console.log('Sales Tracker: Saved', trimmed.length, 'transactions to salestrack_cache for analytics');
@@ -205,17 +198,14 @@ function initSalesTracker() {
                 }
             }
             
-            // Clear collected transactions after saving
             collectedTransactions = [];
         }
         
-        // Use chrome.storage.local for extension-shared storage
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.get(['salestrack_cache'], function(result) {
                 doSave(result.salestrack_cache ? JSON.stringify(result.salestrack_cache) : null);
             });
         } else {
-            // Fallback to localStorage
             var existing = localStorage.getItem('salestrack_cache');
             doSave(existing);
         }
@@ -240,7 +230,6 @@ function initSalesTracker() {
             border: 1px solid #393b3d;
         `;
 
-        // Add question mark button (help)
         const helpBtn = document.createElement('a');
         helpBtn.href = '#';
         helpBtn.title = 'What is this?';
@@ -270,7 +259,6 @@ function initSalesTracker() {
         });
         dashboard.appendChild(helpBtn);
 
-        // Add settings button next to help
         const settingsBtn = document.createElement('a');
         settingsBtn.href = '#';
         settingsBtn.title = 'Settings';
@@ -313,8 +301,9 @@ function initSalesTracker() {
                 <div style="font-size: 16px; color: #ffb800;"><b>Estimated: <span id="days7-robux">R$ 0</span> <span id="days7-conversion" style="font-size:12px; color:#aaa; margin-left:6px;"></span></b></div>
             </div>
             <div style="margin-bottom: 20px;">
-                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">All Time <span style="color: #ffb800;" id="alltime-start">(START ...)</span></div>
-                <div style="font-size: 16px; margin-top: 8px; color: #ffffff;">Total Sales: <b id="alltime-count">0</b></div>
+                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">All Time</div>
+                <div style="font-size: 12px; color: #888; margin-bottom: 8px;">Oldest logged: <span style="color: #ffb800;" id="alltime-start">Loading...</span></div>
+                <div style="font-size: 16px; margin-top: 4px; color: #ffffff;">Total Sales: <b id="alltime-count">0</b></div>
                 <div style="font-size: 16px; color: #ffb800;"><b>Estimated: <span id="alltime-robux">R$ 0</span> <span id="alltime-conversion" style="font-size:12px; color:#aaa; margin-left:6px;"></span></b></div>
             </div>
             <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">
@@ -329,26 +318,21 @@ function initSalesTracker() {
             <div id="reset-tracker" style="color: #ff0000; font-size: 13px; cursor: pointer; text-align: center; opacity: 0.8; font-weight: 600;">reset</div>
         `);
 
-        // Add reset button listener
         dashboard.querySelector('#reset-tracker').addEventListener('click', () => {
             resetState();
             saveState();
             updateDashboard();
         });
 
-        // Add analytics button listener
         dashboard.querySelector('#open-analytics-btn').addEventListener('click', () => {
             const analyticsUrl = chrome.runtime.getURL('analytics.html');
             window.open(analyticsUrl, '_blank');
         });
 
-        // Add donate button listener
         dashboard.querySelector('#donate-tracker-btn').addEventListener('click', () => {
             const donateUrl = chrome.runtime.getURL('donate.html');
             window.open(donateUrl, '_blank');
         });
-        
-        
 
         return dashboard;
     }
@@ -368,7 +352,6 @@ function initSalesTracker() {
         const dashboard = document.getElementById('sales-dashboard');
         if (!dashboard) return;
 
-        // Load current settings from localStorage
         const settings = loadSettings();
 
         const todayCount = dashboard.querySelector('#today-count');
@@ -378,9 +361,11 @@ function initSalesTracker() {
         const alltimeCount = dashboard.querySelector('#alltime-count');
         const alltimeRobux = dashboard.querySelector('#alltime-robux');
         const alltimeStart = dashboard.querySelector('#alltime-start');
+        
         const todayConversion = dashboard.querySelector('#today-conversion');
         const days7Conversion = dashboard.querySelector('#days7-conversion');
         const alltimeConversion = dashboard.querySelector('#alltime-conversion');
+        
         const pending24hRobux = dashboard.querySelector('#pending24h-robux');
         const pending72hRobux = dashboard.querySelector('#pending72h-robux');
         const totalPendingRobux = dashboard.querySelector('#totalpending-robux');
@@ -394,16 +379,18 @@ function initSalesTracker() {
         if (days7Robux) days7Robux.textContent = `R$ ${state.past7Days.robux.toLocaleString()}`;
         if (alltimeCount) alltimeCount.textContent = state.allTime.count.toLocaleString();
         if (alltimeRobux) alltimeRobux.textContent = `R$ ${state.allTime.robux.toLocaleString()}`;
+        
         if (alltimeStart) {
             if (state.oldestSaleDate) {
-                const dateStr = new Date(state.oldestSaleDate).toLocaleDateString('de-DE');
-                alltimeStart.textContent = `(START ${dateStr})`;
+                const dateObj = new Date(state.oldestSaleDate);
+                // Displays nicely formatted as "Oct 15, 2023, 14:30"
+                const dateOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+                alltimeStart.textContent = dateObj.toLocaleDateString(undefined, dateOptions);
             } else {
-                alltimeStart.textContent = '(START ...)';
+                alltimeStart.textContent = 'Scanning history...';
             }
         }
 
-        // Apply conversion display based on settings
         if (settings.showConversion) {
             if (todayConversion) todayConversion.textContent = robuxToCurrency(state.today.robux, settings.currency);
             if (days7Conversion) days7Conversion.textContent = robuxToCurrency(state.past7Days.robux, settings.currency);
@@ -420,62 +407,27 @@ function initSalesTracker() {
             if (totalPendingConversion) totalPendingConversion.textContent = '';
         }
 
-        // Update pending revenue displays
         if (pending24hRobux) pending24hRobux.textContent = `R$ ${state.pending24h.robux.toLocaleString()}`;
         if (pending72hRobux) pending72hRobux.textContent = `R$ ${state.pending72h.robux.toLocaleString()}`;
         if (totalPendingRobux) totalPendingRobux.textContent = `R$ ${state.totalPending.robux.toLocaleString()}`;
 
-        // Apply dark mode setting
         if (settings.darkMode) {
             dashboard.style.background = '#0d0e0f';
         } else {
             dashboard.style.background = '#1b1d1f';
         }
 
-        // Reattach event listeners (they may have been lost if innerHTML was updated elsewhere)
         const resetBtn = dashboard.querySelector('#reset-tracker');
         const analyticsBtn = dashboard.querySelector('#open-analytics-btn');
         const donateBtn = dashboard.querySelector('#donate-tracker-btn');
         const helpBtn = dashboard.querySelector('[title="What is this?"]');
         const settingsBtn = dashboard.querySelector('[title="Settings"]');
         
-        if (resetBtn) {
-            resetBtn.onclick = () => {
-                resetState();
-                saveState();
-                updateDashboard();
-            };
-        }
-
-        if (analyticsBtn) {
-            analyticsBtn.onclick = () => {
-                const analyticsUrl = chrome.runtime.getURL('analytics.html');
-                window.open(analyticsUrl, '_blank');
-            };
-        }
-
-        if (donateBtn) {
-            donateBtn.onclick = () => {
-                const donateUrl = chrome.runtime.getURL('donate.html');
-                window.open(donateUrl, '_blank');
-            };
-        }
-
-        if (helpBtn) {
-            helpBtn.onclick = (e) => {
-                e.preventDefault();
-                const helpUrl = chrome.runtime.getURL('help.html');
-                window.open(helpUrl, '_blank');
-            };
-        }
-
-        if (settingsBtn) {
-            settingsBtn.onclick = (e) => {
-                e.preventDefault();
-                const settingsUrl = chrome.runtime.getURL('settings.html');
-                window.open(settingsUrl, '_blank');
-            };
-        }
+        if (resetBtn) resetBtn.onclick = () => { resetState(); saveState(); updateDashboard(); };
+        if (analyticsBtn) analyticsBtn.onclick = () => { window.open(chrome.runtime.getURL('analytics.html'), '_blank'); };
+        if (donateBtn) donateBtn.onclick = () => { window.open(chrome.runtime.getURL('donate.html'), '_blank'); };
+        if (helpBtn) helpBtn.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('help.html'), '_blank'); };
+        if (settingsBtn) settingsBtn.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('settings.html'), '_blank'); };
     }
 
     // Scan transactions
@@ -493,124 +445,116 @@ function initSalesTracker() {
             const scanStartMostRecentTimestamp = state.mostRecentTransactionTimestamp;
             let maxTransactionTimestampSeen = scanStartMostRecentTimestamp;
             let oldestDate = state.oldestSaleDate ? new Date(state.oldestSaleDate) : null;
+            
             while (hasNextPage) {
                 try {
                     const cursor = state.lastCursor ? `&cursor=${state.lastCursor}` : '';
                     const endpoint = `/v2/groups/${groupId}/transactions?limit=100&transactionType=Sale${cursor}`;
                     
                     console.log('Sales Tracker: Fetching endpoint:', endpoint);
-                    const data = await callRobloxApiJson({
-                        subdomain: 'economy',
-                        endpoint: endpoint,
-                    });
-
-                    console.log('Sales Tracker: Received data:', data);
+                    const data = await callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
 
                     if (!data || !data.data || data.data.length === 0) {
                         console.log('Sales Tracker: No more transactions');
+                        state.lastCursor = ''; // Reset the cursor so next poll starts from newest sales
                         hasNextPage = false;
                         break;
                     }
 
-                    // Process transactions
                     let processedCount = 0;
                     let shouldStop = false;
                     const now = new Date();
-                    data.data.forEach(transaction => {
-                        if (!transaction.currency || typeof transaction.currency.amount !== 'number') return;
+                    
+                    // Fixed: Using a for...of loop so 'break' properly stops execution
+                    for (const transaction of data.data) {
+                        if (!transaction.currency || typeof transaction.currency.amount !== 'number') continue;
+                        
                         const amount = transaction.currency.amount;
                         const transactionDate = new Date(transaction.created);
                         const transactionTimestamp = transactionDate.getTime();
                         
-                        // Stop if we've already counted this transaction (API returns newest first)
+                        // Break out if we hit a sale we have already processed
                         if (scanStartMostRecentTimestamp !== null && transactionTimestamp <= scanStartMostRecentTimestamp) {
                             shouldStop = true;
-                            return;
+                            break; 
                         }
                         
-                        // Track max timestamp seen this run; write it back after scan completes.
                         if (maxTransactionTimestampSeen === null || transactionTimestamp > maxTransactionTimestampSeen) {
                             maxTransactionTimestampSeen = transactionTimestamp;
                         }
                         
-                        // Track oldest sale date
                         if (!oldestDate || transactionDate < oldestDate) {
                             oldestDate = transactionDate;
                         }
-                        // All time
+
                         state.allTime.count++;
                         state.allTime.robux += amount;
 
-                        // Past 7 days
                         if (transactionDate >= sevenDaysAgo) {
                             state.past7Days.count++;
                             state.past7Days.robux += amount;
                         }
 
-                        // Today
                         if (transactionDate >= today) {
                             state.today.count++;
                             state.today.robux += amount;
                         }
                         
-                        // Pending Revenue Tracking (30-day escrow)
                         const releaseDate = new Date(transactionDate);
                         releaseDate.setDate(releaseDate.getDate() + 30);
                         const timeUntilRelease = releaseDate - now;
                         const hoursUntilRelease = timeUntilRelease / (1000 * 60 * 60);
                         
-                        // Only count as pending if release date is still in the future
                         if (timeUntilRelease > 0) {
-                            // Total pending
                             state.totalPending.count++;
                             state.totalPending.robux += amount;
                             
-                            // Next 24 hours (will be released within 24h)
                             if (hoursUntilRelease <= 24) {
                                 state.pending24h.count++;
                                 state.pending24h.robux += amount;
                             }
                             
-                            // Next 72 hours (will be released within 72h)
                             if (hoursUntilRelease <= 72) {
                                 state.pending72h.count++;
                                 state.pending72h.robux += amount;
                             }
                         }
                         
-                        // Collect transaction for analytics dashboard
                         collectedTransactions.push({
                             id: transaction.id || `${transactionDate.getTime()}_${Math.random()}`,
                             created: transaction.created,
                             currency: { amount: amount },
                             details: {
                                 id: transaction.details && transaction.details.id ? String(transaction.details.id) : '',
-                                name: transaction.details && transaction.details.name ? transaction.details.name : 'Unknown Asset'
+                                name: transaction.details && transaction.details.name ? transaction.details.name : 'Unknown Asset',
+                                type: transaction.details && transaction.details.type ? transaction.details.type : 'Unknown'
                             }
                         });
                         
                         processedCount++;
-                    });
+                    }
                     
-                    // Stop pagination if we've reached already-counted transactions
                     if (shouldStop) {
+                        hasNextPage = false;
+                        state.lastCursor = ''; // We caught up, reset cursor to grab new sales next time
+                    } else if (data.nextPageCursor) {
+                        state.lastCursor = data.nextPageCursor;
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    } else {
+                        state.lastCursor = ''; // Finished all history, reset cursor
                         hasNextPage = false;
                     }
 
                     console.log(`Sales Tracker: Processed ${processedCount} transactions`);
+                    
+                    if (oldestDate) state.oldestSaleDate = oldestDate.toISOString();
+                    if (maxTransactionTimestampSeen !== null) state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
+                    
                     updateDashboard();
                     saveState();
 
-                    if (data.nextPageCursor) {
-                        state.lastCursor = data.nextPageCursor;
-                        // Small delay to avoid rate limiting
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    } else {
-                        hasNextPage = false;
-                    }
                 } catch (error) {
                     if (error.status === 429) {
-                        // Rate limited, wait and retry
                         console.log('Sales Tracker: Rate limited, waiting 5 seconds...');
                         await new Promise(resolve => setTimeout(resolve, 5000));
                         continue;
@@ -620,16 +564,6 @@ function initSalesTracker() {
                     }
                 }
             }
-            // After scan, update state.oldestSaleDate
-            if (oldestDate) {
-                state.oldestSaleDate = oldestDate.toISOString();
-            }
-            if (maxTransactionTimestampSeen !== null) {
-                state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
-            }
-            saveState();
-            
-            // Save transactions for analytics dashboard
             saveTransactionsForAnalytics();
         } finally {
             state.isScanning = false;
@@ -641,28 +575,20 @@ function initSalesTracker() {
     loadState();
     initializeSettings();
     console.log('Sales Tracker initialized for group:', groupId);
-    console.log('Initial state:', state);
     
-    // Check if dashboard already exists
     if (!document.getElementById('sales-dashboard')) {
         const dashboard = createDashboard();
         document.body.appendChild(dashboard);
         updateDashboard();
-        console.log('Dashboard created');
     }
 
-    // Start scanning in background
-    console.log('Starting initial scan...');
     scanTransactions();
-
-    // Rescan every 60 seconds
-    setInterval(scanTransactions, 60000);
+    // Decreased interval to 10 seconds (10000ms) for faster logging
+    setInterval(scanTransactions, 10000); 
 }
 
-// Start when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSalesTracker);
 } else {
     initSalesTracker();
 }
-

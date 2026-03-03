@@ -15,9 +15,9 @@
     function escapeHtml(value) {
         return String(value)
             .replace(/&/g, '&amp;')
-            .replace(/</g, '<')
-            .replace(/>/g, '>')
-            .replace(/"/g, '"')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
     }
 
@@ -65,7 +65,6 @@
 
     function readCachedTransactions() {
         return new Promise(function(resolve) {
-            // Use chrome.storage.local which is shared across the extension
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 chrome.storage.local.get(['salestrack_cache'], function(result) {
                     try {
@@ -93,7 +92,6 @@
                     }
                 });
             } else {
-                // Fallback to localStorage
                 try {
                     if (typeof localStorage === 'undefined') {
                         resolve([]);
@@ -232,14 +230,29 @@
             if (velocityPct > 20) trend = 'Hot';
             if (velocityPct < -20) trend = 'Declining';
 
+            // DYNAMIC UPLOAD FEE LOGIC
+            let uploadCost = 0;
+            if (row.type === 'GamePass' || row.type === 'DeveloperProduct') {
+                uploadCost = 0; // Passes and DevProducts are free to upload
+            } else if (row.type === 'Asset') {
+                // If it's an Asset, we check the average price to guess if it's a Shirt or UGC
+                // Shirts/Pants usually sell for ~5 Robux. UGC is forced by Roblox to be at least 15+
+                const averagePrice = row.unitsSold > 0 ? (row.grossRobux / row.unitsSold) : 0;
+                if (averagePrice < 15) {
+                    uploadCost = 10; // It's likely classic clothing
+                } else {
+                    uploadCost = 1750; // It's likely UGC
+                }
+            }
+
             return {
                 assetKey: row.assetKey,
                 assetName: row.assetName,
                 assetId: row.assetId,
                 unitsSold: row.unitsSold,
                 grossRobux: row.grossRobux,
-                netRobux: row.grossRobux * 0.7,
-                taxRobux: row.grossRobux * 0.3,
+                uploadCost: uploadCost, // Save this so we can total it up below
+                netRobux: row.grossRobux - uploadCost, // Dynamic net deduction
                 velocityPct,
                 marketSharePct,
                 trend,
@@ -247,19 +260,26 @@
             };
         });
 
+        // Rank the assets properly FIRST
         const ranked = [...assetMatrix].sort((a, b) => b.grossRobux - a.grossRobux);
         const topCount = Math.max(1, Math.ceil(ranked.length * 0.2));
         let cumulativeGross = 0;
+        
         for (let i = 0; i < ranked.length; i += 1) {
             cumulativeGross += ranked[i].grossRobux;
             const cumulativeShare = totalGross > 0 ? (cumulativeGross / totalGross) * 100 : 0;
             ranked[i].isWhale = i < topCount || cumulativeShare <= 80;
         }
 
+        // Now calculate whale stats from the initialized 'ranked' array
         const whaleRevenue = ranked
             .filter((item) => item.isWhale)
             .reduce((sum, item) => sum + item.grossRobux, 0);
         const whaleSharePct = totalGross > 0 ? (whaleRevenue / totalGross) * 100 : 0;
+
+        // Calculate total costs based on unique assets found
+        const totalUploadCosts = assetMap.size * 1750;
+        const totalNet = totalGross - totalUploadCosts;
 
         const series = [];
         const utcToday = new Date();
@@ -284,8 +304,8 @@
         return {
             transactionCount: normalized.length,
             totalGross,
-            totalNet: totalGross * 0.7,
-            totalTax: totalGross * 0.3,
+            totalNet, // Updated logic
+            totalUploadCosts, // Replaces totalTax
             whaleRevenue,
             whaleSharePct,
             hourlyCounts,
@@ -335,14 +355,14 @@
                 meta: analytics.transactionCount.toLocaleString() + ' transactions',
             },
             {
-                label: 'Total Net (70%)',
+                label: 'Total Net',
                 value: 'R$ ' + formatRobux(analytics.totalNet),
-                meta: 'Estimated creator payout',
+                meta: 'Gross minus total upload fees',
             },
             {
-                label: 'Total Tax Paid (30%)',
-                value: 'R$ ' + formatRobux(analytics.totalTax),
-                meta: 'Platform tax / marketplace cut',
+                label: 'Total Upload Costs',
+                value: 'R$ ' + formatRobux(analytics.totalUploadCosts),
+                meta: 'R$ 1,750 per unique asset',
             },
         ];
 
@@ -497,7 +517,19 @@
             if (row.velocityPct > 20) velocityClass = 'trend-hot';
             if (row.velocityPct < -20) velocityClass = 'trend-down';
 
-            return '<tr><td>' + escapeHtml(row.assetName) + '</td><td>' + row.unitsSold.toLocaleString() + '</td><td>R$ ' + formatRobux(row.grossRobux) + '</td><td>R$ ' + formatRobux(row.netRobux) + '</td><td class="' + velocityClass + '">' + formatPct(row.velocityPct) + '</td><td>' + formatPct(row.marketSharePct) + '</td><td>' + escapeHtml(row.trend) + '</td><td>' + (row.isWhale ? 'Whale' : '-') + '</td></tr>';
+            // Custom class for styling net profits vs net losses visually
+            var netClass = row.netRobux < 0 ? 'net-loss' : 'net-profit';
+
+            return '<tr>' +
+                '<td>' + escapeHtml(row.assetName) + '</td>' +
+                '<td>' + row.unitsSold.toLocaleString() + '</td>' +
+                '<td>R$ ' + formatRobux(row.grossRobux) + '</td>' +
+                '<td class="' + netClass + '">R$ ' + formatRobux(row.netRobux) + '</td>' +
+                '<td class="' + velocityClass + '">' + formatPct(row.velocityPct) + '</td>' +
+                '<td>' + formatPct(row.marketSharePct) + '</td>' +
+                '<td>' + escapeHtml(row.trend) + '</td>' +
+                '<td>' + (row.isWhale ? 'Whale' : '-') + '</td>' +
+                '</tr>';
         }).join('');
     }
 
@@ -717,4 +749,3 @@
 
     boot();
 })();
-
