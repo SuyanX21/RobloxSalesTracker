@@ -590,5 +590,5 @@ function initSalesTracker() {
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSalesTracker);
 } else {
-    initSalesTracker();
+    initSalesTracker(); // hi
 }
