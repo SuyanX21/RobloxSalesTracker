@@ -3,15 +3,10 @@ console.log('Sales Tracker: Script loaded');
 
 async function callRobloxApiJson({ subdomain = 'apis', endpoint }) {
     try {
-        // FIX: Added a cache-busting parameter to ensure we get live data on refresh
-        const separator = endpoint.includes('?') ? '&' : '?';
-        const cacheBuster = `_cb=${Date.now()}`;
-        const url = new URL(endpoint + separator + cacheBuster, `https://${subdomain}.roblox.com`);
-        
+        const url = new URL(endpoint, `https://${subdomain}.roblox.com`);
         const response = await fetch(url.toString(), {
             method: 'GET',
             credentials: 'include',
-            cache: 'no-cache', // FIX: Forces the browser to ignore cached responses
         });
         
         if (response.status === 429) {
@@ -126,7 +121,6 @@ function initSalesTracker() {
                     parsed.lastResetDate = today;
                 }
                 parsed.isScanning = false;
-                parsed.lastCursor = ''; // FIX: Always reset cursor on load so it checks for new sales on page 1 first
                 state = { ...state, ...parsed };
             } catch (error) {
                 console.warn('Sales Tracker: Failed to parse saved state, resetting.', error);
@@ -471,6 +465,7 @@ function initSalesTracker() {
                     let shouldStop = false;
                     const now = new Date();
                     
+                    // Fixed: Using a for...of loop so 'break' properly stops execution
                     for (const transaction of data.data) {
                         if (!transaction.currency || typeof transaction.currency.amount !== 'number') continue;
                         
@@ -595,5 +590,5 @@ function initSalesTracker() {
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSalesTracker);
 } else {
-    initSalesTracker();
+    initSalesTracker(); // hi
 }
