@@ -4,7 +4,7 @@
     --border: #32373c;
     --text: #eef2f5;
     --muted: #9aa4ad;
-    --accent: #00b06f;
+    --accent: #00a568;
     --danger: #d65a5a;
 }
 
@@ -288,3 +288,4 @@ th {
         grid-template-columns: 1fr;
     }
 }
+  
