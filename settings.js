@@ -1,10 +1,11 @@
 ﻿// Load settings from chrome.storage.local when page loads y
 document.addEventListener('DOMContentLoaded', function() {
-    chrome.storage.local.get(['showNotifications', 'darkMode', 'showConversion', 'currency'], (result) => {
+    chrome.storage.local.get(['showNotifications', 'darkMode', 'showConversion', 'currency', 'timeZone'], (result) => {
         document.getElementById('showNotifications').checked = result.showNotifications === true;
         document.getElementById('darkMode').checked = result.darkMode === true;
         document.getElementById('showConversion').checked = result.showConversion !== false;
         document.getElementById('currency').value = result.currency || 'USD';
+        document.getElementById('timeZone').value = result.timeZone || 'UTC';
     });
 });
 
@@ -15,7 +16,8 @@ document.getElementById('settings-form').addEventListener('submit', function(e) 
         showNotifications: document.getElementById('showNotifications').checked,
         darkMode: document.getElementById('darkMode').checked,
         showConversion: document.getElementById('showConversion').checked,
-        currency: document.getElementById('currency').value
+        currency: document.getElementById('currency').value,
+        timeZone: document.getElementById('timeZone').value
     }, () => {
         // Show success message
         const statusEl = document.getElementById('status');
