@@ -1,4 +1,4 @@
-﻿// Load settings from chrome.storage.local when page loads
+﻿// Load settings from chrome.storage.local when page loads y
 document.addEventListener('DOMContentLoaded', function() {
     chrome.storage.local.get(['showNotifications', 'darkMode', 'showConversion', 'currency'], (result) => {
         document.getElementById('showNotifications').checked = result.showNotifications === true;

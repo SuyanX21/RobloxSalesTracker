@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Roblox Sales Tracker",
-  "version": "3.4",
+  "version": "3.5",
   "permissions": ["storage"],
   "background": {
     "service_worker": "background.js"
@@ -19,7 +19,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": [
+      "resources": [ 
         "donate.html",
         "help.html",
         "settings.html",

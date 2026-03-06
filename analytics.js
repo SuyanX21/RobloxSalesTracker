@@ -2,7 +2,7 @@
     const CACHE_KEY = 'salestrack_cache';
     const DAY_MS = 24 * 60 * 60 * 1000;
 
-    const state = {
+    const state = { // hi
         transactions: [],
         analytics: null,
         sortKey: 'grossRobux',
