@@ -50,7 +50,6 @@ const DOMPurify = {
 function getGroupIdFromUrl() {
     let match = window.location.href.match(/[?&]id=(\d+)/);
     if (!match) match = window.location.href.match(/groups\/(\d+)/);
-    if (!match) match = window.location.href.match(/groups\/configure\/(\d+)/);
     console.log('Sales Tracker: Group ID from URL:', match ? match[1] : null);
     return match ? match[1] : null;
 }
@@ -84,7 +83,6 @@ function initSalesTracker() {
         currency: 'USD',
         showNotifications: false,
         darkMode: false,
-        timeZone: 'UTC',
     };
 
     function loadSettings() {
@@ -93,13 +91,12 @@ function initSalesTracker() {
 
     // Initialize settings from storage
     function initializeSettings() {
-        chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode', 'timeZone'], (result) => {
+        chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode'], (result) => {
             settingsCache = {
                 showConversion: result.showConversion !== false,
                 currency: result.currency || 'USD',
                 showNotifications: result.showNotifications === true,
                 darkMode: result.darkMode === true,
-                timeZone: result.timeZone || 'UTC',
             };
             updateDashboard();
         });
@@ -107,7 +104,7 @@ function initSalesTracker() {
 
     // Listen for storage changes from settings page
     chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName === 'local' && (changes.showConversion || changes.currency || changes.showNotifications || changes.darkMode || changes.timeZone)) {
+        if (areaName === 'local' && (changes.showConversion || changes.currency || changes.showNotifications || changes.darkMode)) {
             initializeSettings();
         }
     });
@@ -162,6 +159,8 @@ function initSalesTracker() {
     // Save transactions for analytics dashboard
     function saveTransactionsForAnalytics() {
         if (collectedTransactions.length === 0) return;
+        
+        var storageKey = 'salestrack_cache';
         
         function doSave(existingData) {
             var existingTx = [];
@@ -231,48 +230,65 @@ function initSalesTracker() {
             border: 1px solid #393b3d;
         `;
 
-        const headerActions = document.createElement('div');
-        headerActions.style.cssText = 'position: absolute; top: 12px; right: 12px; display: flex; gap: 8px;';
-
-        const settingsBtn = document.createElement('a');
-        settingsBtn.id = 'tracker-settings-btn';
-        settingsBtn.href = '#';
-        settingsBtn.title = 'Settings';
-        settingsBtn.style.cssText = `
-            text-decoration: none; color: #aaa; font-size: 18px; background: #252729;
-            border-radius: 50%; width: 28px; height: 28px; display: flex;
-            align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            cursor: pointer; transition: background 0.2s;
-        `;
-        settingsBtn.innerHTML = '&#9881;';
-        settingsBtn.onclick = (e) => { 
-            e.preventDefault(); 
-            window.open(chrome.runtime.getURL('settings.html'), '_blank'); 
-        };
-
         const helpBtn = document.createElement('a');
-        helpBtn.id = 'tracker-help-btn';
         helpBtn.href = '#';
         helpBtn.title = 'What is this?';
         helpBtn.style.cssText = `
-            text-decoration: none; color: #aaa; font-size: 18px; background: #252729;
-            border-radius: 50%; width: 28px; height: 28px; display: flex;
-            align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            cursor: pointer; transition: background 0.2s;
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            text-decoration: none;
+            color: #aaa;
+            font-size: 20px;
+            background: #252729;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: background 0.2s;
         `;
-        helpBtn.innerHTML = '?';
-        helpBtn.onclick = (e) => { 
-            e.preventDefault(); 
-            window.open(chrome.runtime.getURL('help.html'), '_blank'); 
-        };
+        helpBtn.innerHTML = '<span style="font-weight: bold;">?</span>';
+        helpBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const helpUrl = chrome.runtime.getURL('help.html');
+            window.open(helpUrl, '_blank');
+        });
+        dashboard.appendChild(helpBtn);
 
-        headerActions.appendChild(settingsBtn);
-        headerActions.appendChild(helpBtn);
-        dashboard.appendChild(headerActions);
+        const settingsBtn = document.createElement('a');
+        settingsBtn.href = '#';
+        settingsBtn.title = 'Settings';
+        settingsBtn.style.cssText = `
+            position: absolute;
+            top: 12px;
+            right: 48px;
+            text-decoration: none;
+            color: #aaa;
+            font-size: 20px;
+            background: #252729;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: background 0.2s;
+        `;
+        settingsBtn.innerHTML = '<span style="font-weight: bold;">&#9881;</span>';
+        settingsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const settingsUrl = chrome.runtime.getURL('settings.html');
+            window.open(settingsUrl, '_blank');
+        });
+        dashboard.appendChild(settingsBtn);
 
-        const content = document.createElement('div');
-        content.id = 'sales-dashboard-content';
-        content.innerHTML = DOMPurify.sanitize(`
+        dashboard.innerHTML += DOMPurify.sanitize(`
             <div style="font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #ffffff;">Roblox Sales Tracker</div> 
             <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">
                 <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Heute (${new Date().toLocaleDateString('de-DE')})</div>
@@ -297,33 +313,40 @@ function initSalesTracker() {
                 <div style="font-size: 14px; margin-top: 8px; color: #ffffff;">Total Pending: <b id="totalpending-robux" style="color: #64b5f6;">R$ 0</b> <span id="totalpending-conversion" style="font-size:11px; color:#aaa; margin-left:6px;"></span></div>
                 <div style="font-size: 12px; color: #aaa; margin-top: 8px; text-align: center;">Est. 30-day escrow</div>
             </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <button id="scan-new-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#404346'" onmouseout="this.style.background='#34373a'">Scan New</button>
+                <button id="scan-full-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#404346'" onmouseout="this.style.background='#34373a'">Full Scan</button>
+            </div>
             <button id="open-analytics-btn" style="width: 100%; padding: 14px 16px; background: #00b06f; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 16px; cursor: pointer; margin-bottom: 10px;">Open Analytics</button>
             <button id="donate-tracker-btn" style="width: 100%; padding: 14px 16px; background: #ffb800; border: none; border-radius: 6px; color: #000; font-weight: bold; font-size: 16px; cursor: pointer; margin-bottom: 12px; transition: background 0.2s;" onmouseover="this.style.background='#ffa500'" onmouseout="this.style.background='#ffb800'">Donate</button>
             <div id="reset-tracker" style="color: #ff0000; font-size: 13px; cursor: pointer; text-align: center; opacity: 0.8; font-weight: 600;">reset</div>
         `);
-        dashboard.appendChild(content);
 
-        // Bind main action buttons
-        dashboard.querySelector('#reset-tracker').onclick = () => {
-            if (confirm('Are you sure you want to reset all tracking data? This cannot be undone.')) {
-                resetState();
-                saveState();
-                updateDashboard();
-                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                    chrome.storage.local.remove('salestrack_cache');
-                } else {
-                    localStorage.removeItem('salestrack_cache');
-                }
+        dashboard.querySelector('#reset-tracker').addEventListener('click', () => {
+            resetState();
+            saveState();
+            updateDashboard();
+        });
+
+        dashboard.querySelector('#scan-new-btn').addEventListener('click', () => {
+            scanTransactions(false);
+        });
+
+        dashboard.querySelector('#scan-full-btn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to perform a full scan? This will reset your current totals and re-scan everything.')) {
+                scanTransactions(true);
             }
-        };
+        });
 
-        dashboard.querySelector('#open-analytics-btn').onclick = () => {
-            window.open(chrome.runtime.getURL('analytics.html'), '_blank');
-        };
+        dashboard.querySelector('#open-analytics-btn').addEventListener('click', () => {
+            const analyticsUrl = chrome.runtime.getURL('analytics.html');
+            window.open(analyticsUrl, '_blank');
+        });
 
-        dashboard.querySelector('#donate-tracker-btn').onclick = () => {
-            window.open(chrome.runtime.getURL('donate.html'), '_blank');
-        };
+        dashboard.querySelector('#donate-tracker-btn').addEventListener('click', () => {
+            const donateUrl = chrome.runtime.getURL('donate.html');
+            window.open(donateUrl, '_blank');
+        });
 
         return dashboard;
     }
@@ -340,13 +363,13 @@ function initSalesTracker() {
 
     // Update dashboard display
     function updateDashboard() {
-        const dashboard = document.getElementById('sales-dashboard');
+        const dashboard = document.getElementById('sales-dashboard') || document.getElementById('rbx-sales-tracker-minimal');
         if (!dashboard) return;
 
         const settings = loadSettings();
 
-        const todayCount = dashboard.querySelector('#today-count');
-        const todayRobux = dashboard.querySelector('#today-robux');
+        const todayCount = dashboard.querySelector('#today-count') || dashboard.querySelector('b'); // fallback for index.html structure
+        const todayRobux = dashboard.querySelector('#today-robux') || dashboard.querySelector('.color-00b06f'); 
         const days7Count = dashboard.querySelector('#days7-count');
         const days7Robux = dashboard.querySelector('#days7-robux');
         const alltimeCount = dashboard.querySelector('#alltime-count');
@@ -374,6 +397,7 @@ function initSalesTracker() {
         if (alltimeStart) {
             if (state.oldestSaleDate) {
                 const dateObj = new Date(state.oldestSaleDate);
+                // Displays nicely formatted as "Oct 15, 2023, 14:30"
                 const dateOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
                 alltimeStart.textContent = dateObj.toLocaleDateString(undefined, dateOptions);
             } else {
@@ -389,84 +413,82 @@ function initSalesTracker() {
             if (pending72hConversion) pending72hConversion.textContent = robuxToCurrency(state.pending72h.robux, settings.currency);
             if (totalPendingConversion) totalPendingConversion.textContent = robuxToCurrency(state.totalPending.robux, settings.currency);
         } else {
-            [todayConversion, days7Conversion, alltimeConversion, pending24hConversion, pending72hConversion, totalPendingConversion].forEach(el => {
-                if (el) el.textContent = '';
-            });
+            if (todayConversion) todayConversion.textContent = '';
+            if (days7Conversion) days7Conversion.textContent = '';
+            if (alltimeConversion) alltimeConversion.textContent = '';
+            if (pending24hConversion) pending24hConversion.textContent = '';
+            if (pending72hConversion) pending72hConversion.textContent = '';
+            if (totalPendingConversion) totalPendingConversion.textContent = '';
         }
 
         if (pending24hRobux) pending24hRobux.textContent = `R$ ${state.pending24h.robux.toLocaleString()}`;
         if (pending72hRobux) pending72hRobux.textContent = `R$ ${state.pending72h.robux.toLocaleString()}`;
         if (totalPendingRobux) totalPendingRobux.textContent = `R$ ${state.totalPending.robux.toLocaleString()}`;
 
-        dashboard.style.background = settings.darkMode ? '#0d0e0f' : '#1b1d1f';
-    }
+        if (settings.darkMode) {
+            dashboard.style.background = '#0d0e0f';
+        } else {
+            dashboard.style.background = '#1b1d1f';
+        }
 
-    function getStartOfDayInTimeZone(timeZone) {
-        const now = new Date();
-        const tzDate = new Date(
-            now.toLocaleString("en-US", { timeZone })
-        );
-        tzDate.setHours(0,0,0,0);
-        return tzDate;
+        const resetBtn = dashboard.querySelector('#reset-tracker');
+        const analyticsBtn = dashboard.querySelector('#open-analytics-btn');
+        const donateBtn = dashboard.querySelector('#donate-tracker-btn');
+        const helpBtn = dashboard.querySelector('[title="What is this?"]');
+        const settingsBtn = dashboard.querySelector('[title="Settings"]');
+        const scanNewBtn = dashboard.querySelector('#scan-new-btn');
+        const scanFullBtn = dashboard.querySelector('#scan-full-btn');
+        
+        if (resetBtn) resetBtn.onclick = () => { resetState(); saveState(); updateDashboard(); };
+        if (analyticsBtn) analyticsBtn.onclick = () => { window.open(chrome.runtime.getURL('analytics.html'), '_blank'); };
+        if (donateBtn) donateBtn.onclick = () => { window.open(chrome.runtime.getURL('donate.html'), '_blank'); };
+        if (helpBtn) helpBtn.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('help.html'), '_blank'); };
+        if (settingsBtn) settingsBtn.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('settings.html'), '_blank'); };
+        if (scanNewBtn) scanNewBtn.onclick = () => { scanTransactions(false); };
+        if (scanFullBtn) scanFullBtn.onclick = () => { if (confirm('Are you sure you want to perform a full scan? This will reset your current totals and re-scan everything.')) { scanTransactions(true); } };
     }
 
     // Scan transactions
-    async function scanTransactions() {
+    async function scanTransactions(isFullScan = false) {
         if (state.isScanning) return;
+        
+        if (isFullScan) {
+            resetState();
+            saveState();
+        }
         
         state.isScanning = true;
         updateDashboard();
 
         try {
-            const todayStr = new Date().toDateString();
-            if (state.lastResetDate !== todayStr) {
-                console.log('Sales Tracker: New day detected, resetting today counters');
-                state.today = { count: 0, robux: 0 };
-                state.lastResetDate = todayStr;
-                saveState();
-            }
-
+            let hasNextPage = true;
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            const today = new Date();
+            today.setUTCHours(0, 0, 0, 0);
             const scanStartMostRecentTimestamp = state.mostRecentTransactionTimestamp;
-            const historicalBookmark = state.lastCursor; 
-            
             let maxTransactionTimestampSeen = scanStartMostRecentTimestamp;
             let oldestDate = state.oldestSaleDate ? new Date(state.oldestSaleDate) : null;
             
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            
-            // USE TIMEZONE FOR TODAY
-            const today = getStartOfDayInTimeZone(settingsCache.timeZone);
-            const now = new Date();
-
-            let currentCursor = ''; 
-            let isResumingHistorical = false;
-            let hasNextPage = true;
-            
             while (hasNextPage) {
                 try {
-                    const cursorParam = currentCursor ? `&cursor=${currentCursor}` : '';
-                    const endpoint = `/v2/groups/${groupId}/transactions?limit=100&transactionType=Sale${cursorParam}`;
+                    const cursor = state.lastCursor ? `&cursor=${state.lastCursor}` : '';
+                    const endpoint = `/v2/groups/${groupId}/transactions?limit=100&transactionType=Sale${cursor}`;
                     
                     console.log('Sales Tracker: Fetching endpoint:', endpoint);
                     const data = await callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
 
                     if (!data || !data.data || data.data.length === 0) {
-                        console.log('Sales Tracker: End of transaction history reached');
-                        state.lastCursor = ''; 
+                        console.log('Sales Tracker: No more transactions');
+                        state.lastCursor = ''; // Reset the cursor so next poll starts from newest sales
                         hasNextPage = false;
                         break;
                     }
 
-                    if (!currentCursor && data.data.length > 0) {
-                        const newestOnPage = new Date(data.data[0].created).getTime();
-                        if (maxTransactionTimestampSeen === null || newestOnPage > maxTransactionTimestampSeen) {
-                            maxTransactionTimestampSeen = newestOnPage;
-                        }
-                    }
-
-                    let processedOnPage = 0;
-                    let caughtUpWithNew = false;
+                    let processedCount = 0;
+                    let shouldStop = false;
+                    const now = new Date();
                     
+                    // Fixed: Using a for...of loop so 'break' properly stops execution
                     for (const transaction of data.data) {
                         if (!transaction.currency || typeof transaction.currency.amount !== 'number') continue;
                         
@@ -474,9 +496,14 @@ function initSalesTracker() {
                         const transactionDate = new Date(transaction.created);
                         const transactionTimestamp = transactionDate.getTime();
                         
-                        if (!isResumingHistorical && scanStartMostRecentTimestamp !== null && transactionTimestamp <= scanStartMostRecentTimestamp) {
-                            caughtUpWithNew = true;
+                        // Break out if we hit a sale we have already processed
+                        if (!isFullScan && scanStartMostRecentTimestamp !== null && transactionTimestamp <= scanStartMostRecentTimestamp) {
+                            shouldStop = true;
                             break; 
+                        }
+                        
+                        if (maxTransactionTimestampSeen === null || transactionTimestamp > maxTransactionTimestampSeen) {
+                            maxTransactionTimestampSeen = transactionTimestamp;
                         }
                         
                         if (!oldestDate || transactionDate < oldestDate) {
@@ -504,10 +531,12 @@ function initSalesTracker() {
                         if (timeUntilRelease > 0) {
                             state.totalPending.count++;
                             state.totalPending.robux += amount;
+                            
                             if (hoursUntilRelease <= 24) {
                                 state.pending24h.count++;
                                 state.pending24h.robux += amount;
                             }
+                            
                             if (hoursUntilRelease <= 72) {
                                 state.pending72h.count++;
                                 state.pending72h.robux += amount;
@@ -515,7 +544,7 @@ function initSalesTracker() {
                         }
                         
                         collectedTransactions.push({
-                            id: transaction.id || `${transactionTimestamp}_${Math.random()}`,
+                            id: transaction.id || `${transactionDate.getTime()}_${Math.random()}`,
                             created: transaction.created,
                             currency: { amount: amount },
                             details: {
@@ -525,53 +554,35 @@ function initSalesTracker() {
                             }
                         });
                         
-                        processedOnPage++;
+                        processedCount++;
                     }
                     
-                    if (caughtUpWithNew) {
-                        console.log('Sales Tracker: Caught up with new sales.');
-                        if (historicalBookmark) {
-                            console.log('Sales Tracker: Resuming historical scan from bookmark...');
-                            currentCursor = historicalBookmark;
-                            isResumingHistorical = true;
-                            state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
-                            saveState();
-                            continue; 
-                        } else {
-                            state.lastCursor = '';
-                            hasNextPage = false;
-                        }
+                    if (shouldStop) {
+                        hasNextPage = false;
+                        state.lastCursor = ''; // We caught up, reset cursor to grab new sales next time
                     } else if (data.nextPageCursor) {
-                        currentCursor = data.nextPageCursor;
-                        if (isResumingHistorical || scanStartMostRecentTimestamp === null) {
-                            state.lastCursor = data.nextPageCursor;
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 2500));
+                        state.lastCursor = data.nextPageCursor;
+                        await new Promise(resolve => setTimeout(resolve, 500));
                     } else {
-                        console.log('Sales Tracker: Finished history scan.');
-                        state.lastCursor = ''; 
+                        state.lastCursor = ''; // Finished all history, reset cursor
                         hasNextPage = false;
                     }
 
-                    console.log(`Sales Tracker: Processed ${processedOnPage} transactions on this page`);
+                    console.log(`Sales Tracker: Processed ${processedCount} transactions`);
                     
                     if (oldestDate) state.oldestSaleDate = oldestDate.toISOString();
                     if (maxTransactionTimestampSeen !== null) state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
                     
                     updateDashboard();
                     saveState();
-                    
-                    if (collectedTransactions.length >= 200) {
-                        saveTransactionsForAnalytics();
-                    }
 
                 } catch (error) {
                     if (error.status === 429) {
-                        console.log('Sales Tracker: Rate limited, waiting 15 seconds...');
-                        await new Promise(resolve => setTimeout(resolve, 15000));
+                        console.log('Sales Tracker: Rate limited, waiting 5 seconds...');
+                        await new Promise(resolve => setTimeout(resolve, 5000));
                         continue;
                     } else {
-                        console.error('Sales Tracker Error during scan:', error);
+                        console.error('Sales Tracker Error:', error);
                         hasNextPage = false;
                     }
                 }
@@ -592,11 +603,13 @@ function initSalesTracker() {
         const dashboard = createDashboard();
         document.body.appendChild(dashboard);
         updateDashboard();
+    } else {
+        updateDashboard();
     }
 
     scanTransactions();
-    // Scan every 15 seconds to be safer
-    setInterval(scanTransactions, 15000); 
+    // Decreased interval to 10 seconds (10000ms) for faster logging
+    setInterval(scanTransactions, 10000); 
 }
 
 if (document.readyState === 'loading') {
