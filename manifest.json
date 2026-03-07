@@ -1,8 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Roblox Sales Tracker",
-  "version": "3.5",
+  "version": "3.6",
+  "description": "Standalone Roblox sales intelligence dashboard and real-time sales tracker.",
   "permissions": ["storage"],
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "action": {
+    "default_icon": "images/icon48.png",
+    "default_popup": "index.html"
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -19,7 +29,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": [ 
+      "resources": [
         "donate.html",
         "help.html",
         "settings.html",
@@ -27,7 +37,8 @@
         "analytics.html",
         "analytics.css",
         "analytics.js",
-        "background.js"
+        "background.js",
+        "images/*"
       ],
       "matches": ["https://www.roblox.com/*"]
     }
