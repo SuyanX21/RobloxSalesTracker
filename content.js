@@ -489,21 +489,24 @@ function initSalesTracker() {
 
                     let processedCountInThisPage = 0;
                     let shouldStopScan = false;
+                    let hitsOnThisPage = 0;
                     const now = new Date();
                     
                     for (const transaction of data.data) {
                         if (!transaction.currency || typeof transaction.currency.amount !== 'number') continue;
                         
-                        const txId = String(transaction.id || transaction.created);
+                        // Use a robust unique ID (Roblox ID or fallback to Timestamp + Amount + AssetID)
+                        const txId = transaction.id ? String(transaction.id) : `fb_${transaction.created}_${transaction.currency.amount}_${transaction.details ? transaction.details.id : ''}`;
                         
                         // Check if this transaction was ALREADY processed in this session or previous ones
                         const isAlreadyProcessed = (state.processedIds && state.processedIds.includes(txId)) || newlyProcessedIds.includes(txId);
                         
-                        // In "Scan New" mode, we stop as soon as we hit a transaction we've already seen
+                        // In "Scan New" mode, we mark that we should stop, but we FINISH the page first
+                        // This handles out-of-order transactions or slight API caching issues.
                         if (!isFullScan && isAlreadyProcessed) {
                             shouldStopScan = true;
-                            console.log('Sales Tracker: Hit processed ID, stopping scan:', txId);
-                            break; 
+                            hitsOnThisPage++;
+                            continue; 
                         }
 
                         // CRITICAL: Even in Full Scan (or if we didn't stop), NEVER count the same ID twice
@@ -574,6 +577,7 @@ function initSalesTracker() {
                     }
                     
                     if (shouldStopScan) {
+                        console.log(`Sales Tracker: Hit ${hitsOnThisPage} already-processed IDs on this page. Stopping scan after finishing this page.`);
                         hasNextPage = false;
                         state.lastCursor = ''; 
                     } else if (data.nextPageCursor) {
@@ -584,7 +588,7 @@ function initSalesTracker() {
                         hasNextPage = false;
                     }
 
-                    console.log(`Sales Tracker: Processed ${processedCountInThisPage} transactions on this page`);
+                    console.log(`Sales Tracker: Processed ${processedCountInThisPage} NEW transactions on this page`);
                     
                     if (oldestDate) state.oldestSaleDate = oldestDate.toISOString();
                     if (maxTransactionTimestampSeen !== null) state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
