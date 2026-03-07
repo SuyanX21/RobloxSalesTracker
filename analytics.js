@@ -2,7 +2,7 @@
     const CACHE_KEY = 'salestrack_cache';
     const DAY_MS = 24 * 60 * 60 * 1000;
 
-    const state = { // hi
+    const state = {
         transactions: [],
         analytics: null,
         sortKey: 'grossRobux',
@@ -11,6 +11,46 @@
         searchQuery: '',
         whalesOnly: false,
     };
+
+    const settings = {
+        timeZone: 'UTC'
+    };
+
+    function loadSettings() {
+        return new Promise((resolve) => {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get(['timeZone'], function(result) {
+                    settings.timeZone = result.timeZone || 'UTC';
+                    resolve();
+                });
+            } else {
+                resolve();
+            }
+        });
+    }
+
+    function getISODateInTimezone(date, timezone) {
+        try {
+            const options = { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' };
+            const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(date);
+            const year = parts.find(p => p.type === 'year').value;
+            const month = parts.find(p => p.type === 'month').value;
+            const day = parts.find(p => p.type === 'day').value;
+            return `${year}-${month}-${day}`;
+        } catch (e) {
+            return date.toISOString().slice(0, 10);
+        }
+    }
+
+    function getHourInTimezone(date, timezone) {
+        try {
+            const options = { timeZone: timezone, hour12: false, hour: '2-digit' };
+            const hourStr = new Intl.DateTimeFormat('en-US', options).format(date);
+            return parseInt(hourStr) % 24;
+        } catch (e) {
+            return date.getUTCHours();
+        }
+    }
 
     function escapeHtml(value) {
         return String(value)
@@ -186,15 +226,16 @@
 
         for (const tx of normalized) {
             const amount = tx.currency.amount;
-            const createdTs = Date.parse(tx.created);
+            const createdDate = new Date(tx.created);
+            const createdTs = createdDate.getTime();
             if (!Number.isFinite(createdTs)) continue;
 
             totalGross += amount;
 
-            const hour = new Date(createdTs).getUTCHours();
+            const hour = getHourInTimezone(createdDate, settings.timeZone);
             hourlyCounts[hour] += 1;
 
-            const dayKey = tx.created.slice(0, 10);
+            const dayKey = getISODateInTimezone(createdDate, settings.timeZone);
             dailyRevenueMap.set(dayKey, (dailyRevenueMap.get(dayKey) || 0) + amount);
 
             const key = tx.details.id || tx.details.name;
@@ -282,16 +323,11 @@
         const totalNet = totalGross - totalUploadCosts;
 
         const series = [];
-        const utcToday = new Date();
-        const utcAnchor = Date.UTC(
-            utcToday.getUTCFullYear(),
-            utcToday.getUTCMonth(),
-            utcToday.getUTCDate()
-        );
-
+        const today = new Date();
+        
         for (let offset = 29; offset >= 0; offset -= 1) {
-            const dayDate = new Date(utcAnchor - (offset * DAY_MS));
-            const key = dayDate.toISOString().slice(0, 10);
+            const dayDate = new Date(today.getTime() - (offset * DAY_MS));
+            const key = getISODateInTimezone(dayDate, settings.timeZone);
             series.push({
                 day: key,
                 grossRobux: Math.round(dailyRevenueMap.get(key) || 0),
@@ -390,7 +426,7 @@
             goldenHourText.textContent = 'Golden Hour: n/a';
         } else {
             var hour = String(analytics.goldenHour).padStart(2, '0');
-            goldenHourText.textContent = 'Golden Hour: ' + hour + ':00 UTC (' + analytics.hourlyCounts[analytics.goldenHour] + ' sales)';
+            goldenHourText.textContent = 'Golden Hour: ' + hour + ':00 (' + settings.timeZone + ') (' + analytics.hourlyCounts[analytics.goldenHour] + ' sales)';
         }
     }
 
@@ -720,7 +756,8 @@
         window.addEventListener('resize', renderChart);
     }
 
-    function boot() {
+    async function boot() {
+        await loadSettings();
         readCachedTransactions().then(function(fromCache) {
             var fromWindow = [];
             if (Array.isArray(window.salestrackTransactions)) {

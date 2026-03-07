@@ -83,6 +83,7 @@ function initSalesTracker() {
         currency: 'USD',
         showNotifications: false,
         darkMode: false,
+        timeZone: 'UTC',
     };
 
     function loadSettings() {
@@ -91,12 +92,13 @@ function initSalesTracker() {
 
     // Initialize settings from storage
     function initializeSettings() {
-        chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode'], (result) => {
+        chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode', 'timeZone'], (result) => {
             settingsCache = {
                 showConversion: result.showConversion !== false,
                 currency: result.currency || 'USD',
                 showNotifications: result.showNotifications === true,
                 darkMode: result.darkMode === true,
+                timeZone: result.timeZone || 'UTC',
             };
             updateDashboard();
         });
@@ -104,7 +106,7 @@ function initSalesTracker() {
 
     // Listen for storage changes from settings page
     chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName === 'local' && (changes.showConversion || changes.currency || changes.showNotifications || changes.darkMode)) {
+        if (areaName === 'local' && (changes.showConversion || changes.currency || changes.showNotifications || changes.darkMode || changes.timeZone)) {
             initializeSettings();
         }
     });
@@ -211,6 +213,18 @@ function initSalesTracker() {
         }
     }
 
+    // Helper to check if a date is "today" in a specific timezone
+    function isSameDayInTimezone(date, timezone) {
+        try {
+            const options = { timeZone: timezone, year: 'numeric', month: 'numeric', day: 'numeric' };
+            const nowStr = new Date().toLocaleDateString('en-US', options);
+            const dateStr = date.toLocaleDateString('en-US', options);
+            return nowStr === dateStr;
+        } catch (e) {
+            return date.toDateString() === new Date().toDateString();
+        }
+    }
+
     // Create dashboard UI
     function createDashboard() {
         const dashboard = document.createElement('div');
@@ -288,10 +302,13 @@ function initSalesTracker() {
         });
         dashboard.appendChild(settingsBtn);
 
+        const settings = loadSettings();
+        const todayStr = new Date().toLocaleDateString('de-DE', { timeZone: settings.timeZone });
+
         dashboard.innerHTML += DOMPurify.sanitize(`
             <div style="font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #ffffff;">Roblox Sales Tracker</div> 
             <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">
-                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Heute (${new Date().toLocaleDateString('de-DE')})</div>
+                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Today (<span id="today-label">${todayStr}</span>)</div>
                 <div style="font-size: 16px; margin-top: 8px; color: #ffffff;">Sales: <b id="today-count">0</b></div>
                 <div style="font-size: 18px; color: #00b06f; font-weight: bold;"><b id="today-robux">R$ 0</b> <span id="today-conversion" style="font-size:12px; color:#aaa; margin-left:6px;"></span></div>
             </div>
@@ -368,6 +385,15 @@ function initSalesTracker() {
 
         const settings = loadSettings();
 
+        const todayLabel = dashboard.querySelector('#today-label');
+        if (todayLabel) {
+            try {
+                todayLabel.textContent = new Date().toLocaleDateString('de-DE', { timeZone: settings.timeZone });
+            } catch (e) {
+                todayLabel.textContent = new Date().toLocaleDateString('de-DE');
+            }
+        }
+
         const todayCount = dashboard.querySelector('#today-count') || dashboard.querySelector('b'); // fallback for index.html structure
         const todayRobux = dashboard.querySelector('#today-robux') || dashboard.querySelector('.color-00b06f'); 
         const days7Count = dashboard.querySelector('#days7-count');
@@ -399,7 +425,11 @@ function initSalesTracker() {
                 const dateObj = new Date(state.oldestSaleDate);
                 // Displays nicely formatted as "Oct 15, 2023, 14:30"
                 const dateOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-                alltimeStart.textContent = dateObj.toLocaleDateString(undefined, dateOptions);
+                try {
+                    alltimeStart.textContent = dateObj.toLocaleDateString(undefined, { ...dateOptions, timeZone: settings.timeZone });
+                } catch (e) {
+                    alltimeStart.textContent = dateObj.toLocaleDateString(undefined, dateOptions);
+                }
             } else {
                 alltimeStart.textContent = 'Scanning history...';
             }
@@ -414,7 +444,7 @@ function initSalesTracker() {
             if (totalPendingConversion) totalPendingConversion.textContent = robuxToCurrency(state.totalPending.robux, settings.currency);
         } else {
             if (todayConversion) todayConversion.textContent = '';
-            if (days7Conversion) days7Conversion.textContent = '';
+            if (days7Conversion) todayConversion.textContent = '';
             if (alltimeConversion) alltimeConversion.textContent = '';
             if (pending24hConversion) pending24hConversion.textContent = '';
             if (pending72hConversion) pending72hConversion.textContent = '';
@@ -436,6 +466,7 @@ function initSalesTracker() {
         const donateBtn = dashboard.querySelector('#donate-tracker-btn');
         const helpBtn = dashboard.querySelector('[title="What is this?"]');
         const settingsBtn = dashboard.querySelector('[title="Settings"]');
+        const settingsLink = dashboard.querySelector('#settings-link');
         const scanNewBtn = dashboard.querySelector('#scan-new-btn');
         const scanFullBtn = dashboard.querySelector('#scan-full-btn');
         
@@ -444,6 +475,7 @@ function initSalesTracker() {
         if (donateBtn) donateBtn.onclick = () => { window.open(chrome.runtime.getURL('donate.html'), '_blank'); };
         if (helpBtn) helpBtn.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('help.html'), '_blank'); };
         if (settingsBtn) settingsBtn.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('settings.html'), '_blank'); };
+        if (settingsLink) settingsLink.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('settings.html'), '_blank'); };
         if (scanNewBtn) scanNewBtn.onclick = () => { scanTransactions(false); };
         if (scanFullBtn) scanFullBtn.onclick = () => { if (confirm('Are you sure you want to perform a full scan? This will reset your current totals and re-scan everything.')) { scanTransactions(true); } };
     }
@@ -451,6 +483,8 @@ function initSalesTracker() {
     // Scan transactions
     async function scanTransactions(isFullScan = false) {
         if (state.isScanning) return;
+        
+        const settings = loadSettings();
         
         if (isFullScan) {
             resetState();
@@ -463,8 +497,6 @@ function initSalesTracker() {
         try {
             let hasNextPage = true;
             const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            const today = new Date();
-            today.setUTCHours(0, 0, 0, 0);
             const scanStartMostRecentTimestamp = state.mostRecentTransactionTimestamp;
             let maxTransactionTimestampSeen = scanStartMostRecentTimestamp;
             let oldestDate = state.oldestSaleDate ? new Date(state.oldestSaleDate) : null;
@@ -518,7 +550,7 @@ function initSalesTracker() {
                             state.past7Days.robux += amount;
                         }
 
-                        if (transactionDate >= today) {
+                        if (isSameDayInTimezone(transactionDate, settings.timeZone)) {
                             state.today.count++;
                             state.today.robux += amount;
                         }
