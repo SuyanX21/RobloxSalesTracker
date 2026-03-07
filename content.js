@@ -595,8 +595,8 @@ function initSalesTracker() {
 
                 } catch (error) {
                     if (error.status === 429) {
-                        console.log('Sales Tracker: Rate limited, waiting 5 seconds...');
-                        await new Promise(resolve => setTimeout(resolve, 5000));
+                        console.log('Sales Tracker: Rate limited, waiting 10 seconds...');
+                        await new Promise(resolve => setTimeout(resolve, 10000));
                         continue;
                     } else {
                         console.error('Sales Tracker Error:', error);
