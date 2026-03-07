@@ -499,6 +499,7 @@ function initSalesTracker() {
                         
                         if (!isFullScan && isAlreadyProcessed) {
                             shouldStop = true;
+                            console.log('Sales Tracker: Hit processed ID, stopping scan:', txId);
                             break; 
                         }
 
@@ -506,6 +507,10 @@ function initSalesTracker() {
                         if (isAlreadyProcessed && !isFullScan) continue;
 
                         const amount = transaction.currency.amount;
+                        // Skip zero-amount transactions if they aren't true sales (e.g. some internal adjustments)
+                        // but usually sales are > 0.
+                        if (amount <= 0 && isFullScan) continue; 
+
                         const transactionDate = new Date(transaction.created);
                         const transactionTimestamp = transactionDate.getTime();
                         
@@ -561,17 +566,17 @@ function initSalesTracker() {
                             }
                         });
                         
-                        // Add to processedIds to avoid double-counting in next "new" scan
+                        // Add to processedIds at the BEGINNING so they are kept during slice
                         if (!isAlreadyProcessed) {
-                            state.processedIds.push(txId);
+                            state.processedIds.unshift(txId);
                         }
                         
                         processedCount++;
                     }
                     
-                    // Keep processedIds at a reasonable size (keep the NEWEST 1000)
-                    if (state.processedIds.length > 1000) {
-                        state.processedIds = state.processedIds.slice(0, 1000);
+                    // Keep processedIds at a reasonable size (keep the NEWEST 2000)
+                    if (state.processedIds.length > 2000) {
+                        state.processedIds = state.processedIds.slice(0, 2000);
                     }
 
                     if (shouldStop) {
