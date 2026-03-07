@@ -4,6 +4,9 @@ console.log('Sales Tracker: Script loaded');
 async function callRobloxApiJson({ subdomain = 'apis', endpoint }) {
     try {
         const url = new URL(endpoint, `https://${subdomain}.roblox.com`);
+        // Add cache buster to bypass potential API caching
+        url.searchParams.set('_t', Date.now());
+        
         const response = await fetch(url.toString(), {
             method: 'GET',
             credentials: 'include',
@@ -72,6 +75,8 @@ function initSalesTracker() {
         pending24h: { count: 0, robux: 0 },
         pending72h: { count: 0, robux: 0 },
         totalPending: { count: 0, robux: 0 },
+        scanType: 'new',
+        processedIds: [], // Store last ~500 processed transaction IDs
     };
 
     // Collected transactions for analytics dashboard
@@ -124,6 +129,7 @@ function initSalesTracker() {
                 }
                 parsed.isScanning = false;
                 state = { ...state, ...parsed };
+                if (!state.processedIds) state.processedIds = [];
             } catch (error) {
                 console.warn('Sales Tracker: Failed to parse saved state, resetting.', error);
             }
@@ -131,7 +137,7 @@ function initSalesTracker() {
     }
     
     // Reset state helper
-    function resetState() {
+    function resetState(newType = 'new') {
         state = {
             today: { count: 0, robux: 0 },
             past7Days: { count: 0, robux: 0 },
@@ -144,6 +150,8 @@ function initSalesTracker() {
             pending24h: { count: 0, robux: 0 },
             pending72h: { count: 0, robux: 0 },
             totalPending: { count: 0, robux: 0 },
+            scanType: newType,
+            processedIds: [],
         };
     }
     
@@ -244,68 +252,16 @@ function initSalesTracker() {
             border: 1px solid #393b3d;
         `;
 
-        const helpBtn = document.createElement('a');
-        helpBtn.href = '#';
-        helpBtn.title = 'What is this?';
-        helpBtn.style.cssText = `
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            text-decoration: none;
-            color: #aaa;
-            font-size: 20px;
-            background: #252729;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            cursor: pointer;
-            transition: background 0.2s;
-        `;
-        helpBtn.innerHTML = '<span style="font-weight: bold;">?</span>';
-        helpBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            const helpUrl = chrome.runtime.getURL('help.html');
-            window.open(helpUrl, '_blank');
-        });
-        dashboard.appendChild(helpBtn);
-
-        const settingsBtn = document.createElement('a');
-        settingsBtn.href = '#';
-        settingsBtn.title = 'Settings';
-        settingsBtn.style.cssText = `
-            position: absolute;
-            top: 12px;
-            right: 48px;
-            text-decoration: none;
-            color: #aaa;
-            font-size: 20px;
-            background: #252729;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            cursor: pointer;
-            transition: background 0.2s;
-        `;
-        settingsBtn.innerHTML = '<span style="font-weight: bold;">&#9881;</span>';
-        settingsBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            const settingsUrl = chrome.runtime.getURL('settings.html');
-            window.open(settingsUrl, '_blank');
-        });
-        dashboard.appendChild(settingsBtn);
-
         const settings = loadSettings();
         const todayStr = new Date().toLocaleDateString('de-DE', { timeZone: settings.timeZone });
 
-        dashboard.innerHTML += DOMPurify.sanitize(`
+        const html = `
+            <a href="#" id="tracker-help-btn" title="What is this?" style="position: absolute; top: 12px; right: 12px; text-decoration: none; color: #aaa; font-size: 20px; background: #252729; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer; transition: background 0.2s;">
+                <span style="font-weight: bold;">?</span>
+            </a>
+            <a href="#" id="tracker-settings-btn" title="Settings" style="position: absolute; top: 12px; right: 48px; text-decoration: none; color: #aaa; font-size: 20px; background: #252729; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer; transition: background 0.2s;">
+                <span style="font-weight: bold;">&#9881;</span>
+            </a>
             <div style="font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #ffffff;">Roblox Sales Tracker</div> 
             <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">
                 <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Today (<span id="today-label">${todayStr}</span>)</div>
@@ -331,13 +287,25 @@ function initSalesTracker() {
                 <div style="font-size: 12px; color: #aaa; margin-top: 8px; text-align: center;">Est. 30-day escrow</div>
             </div>
             <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                <button id="scan-new-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#404346'" onmouseout="this.style.background='#34373a'">Scan New</button>
-                <button id="scan-full-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#404346'" onmouseout="this.style.background='#34373a'">Full Scan</button>
+                <button id="scan-new-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;">Scan New</button>
+                <button id="scan-full-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;">Full Scan</button>
             </div>
             <button id="open-analytics-btn" style="width: 100%; padding: 14px 16px; background: #00b06f; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 16px; cursor: pointer; margin-bottom: 10px;">Open Analytics</button>
             <button id="donate-tracker-btn" style="width: 100%; padding: 14px 16px; background: #ffb800; border: none; border-radius: 6px; color: #000; font-weight: bold; font-size: 16px; cursor: pointer; margin-bottom: 12px; transition: background 0.2s;" onmouseover="this.style.background='#ffa500'" onmouseout="this.style.background='#ffb800'">Donate</button>
             <div id="reset-tracker" style="color: #ff0000; font-size: 13px; cursor: pointer; text-align: center; opacity: 0.8; font-weight: 600;">reset</div>
-        `);
+        `;
+
+        dashboard.innerHTML = DOMPurify.sanitize(html);
+
+        dashboard.querySelector('#tracker-help-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            window.open(chrome.runtime.getURL('help.html'), '_blank');
+        });
+
+        dashboard.querySelector('#tracker-settings-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            window.open(chrome.runtime.getURL('settings.html'), '_blank');
+        });
 
         dashboard.querySelector('#reset-tracker').addEventListener('click', () => {
             resetState();
@@ -356,13 +324,11 @@ function initSalesTracker() {
         });
 
         dashboard.querySelector('#open-analytics-btn').addEventListener('click', () => {
-            const analyticsUrl = chrome.runtime.getURL('analytics.html');
-            window.open(analyticsUrl, '_blank');
+            window.open(chrome.runtime.getURL('analytics.html'), '_blank');
         });
 
         dashboard.querySelector('#donate-tracker-btn').addEventListener('click', () => {
-            const donateUrl = chrome.runtime.getURL('donate.html');
-            window.open(donateUrl, '_blank');
+            window.open(chrome.runtime.getURL('donate.html'), '_blank');
         });
 
         return dashboard;
@@ -394,8 +360,8 @@ function initSalesTracker() {
             }
         }
 
-        const todayCount = dashboard.querySelector('#today-count') || dashboard.querySelector('b'); // fallback for index.html structure
-        const todayRobux = dashboard.querySelector('#today-robux') || dashboard.querySelector('.color-00b06f'); 
+        const todayCount = dashboard.querySelector('#today-count');
+        const todayRobux = dashboard.querySelector('#today-robux'); 
         const days7Count = dashboard.querySelector('#days7-count');
         const days7Robux = dashboard.querySelector('#days7-robux');
         const alltimeCount = dashboard.querySelector('#alltime-count');
@@ -423,7 +389,6 @@ function initSalesTracker() {
         if (alltimeStart) {
             if (state.oldestSaleDate) {
                 const dateObj = new Date(state.oldestSaleDate);
-                // Displays nicely formatted as "Oct 15, 2023, 14:30"
                 const dateOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
                 try {
                     alltimeStart.textContent = dateObj.toLocaleDateString(undefined, { ...dateOptions, timeZone: settings.timeZone });
@@ -444,7 +409,7 @@ function initSalesTracker() {
             if (totalPendingConversion) totalPendingConversion.textContent = robuxToCurrency(state.totalPending.robux, settings.currency);
         } else {
             if (todayConversion) todayConversion.textContent = '';
-            if (days7Conversion) todayConversion.textContent = '';
+            if (days7Conversion) days7Conversion.textContent = '';
             if (alltimeConversion) alltimeConversion.textContent = '';
             if (pending24hConversion) pending24hConversion.textContent = '';
             if (pending72hConversion) pending72hConversion.textContent = '';
@@ -461,34 +426,39 @@ function initSalesTracker() {
             dashboard.style.background = '#1b1d1f';
         }
 
-        const resetBtn = dashboard.querySelector('#reset-tracker');
-        const analyticsBtn = dashboard.querySelector('#open-analytics-btn');
-        const donateBtn = dashboard.querySelector('#donate-tracker-btn');
-        const helpBtn = dashboard.querySelector('[title="What is this?"]');
-        const settingsBtn = dashboard.querySelector('[title="Settings"]');
-        const settingsLink = dashboard.querySelector('#settings-link');
         const scanNewBtn = dashboard.querySelector('#scan-new-btn');
         const scanFullBtn = dashboard.querySelector('#scan-full-btn');
         
-        if (resetBtn) resetBtn.onclick = () => { resetState(); saveState(); updateDashboard(); };
-        if (analyticsBtn) analyticsBtn.onclick = () => { window.open(chrome.runtime.getURL('analytics.html'), '_blank'); };
-        if (donateBtn) donateBtn.onclick = () => { window.open(chrome.runtime.getURL('donate.html'), '_blank'); };
-        if (helpBtn) helpBtn.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('help.html'), '_blank'); };
-        if (settingsBtn) settingsBtn.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('settings.html'), '_blank'); };
-        if (settingsLink) settingsLink.onclick = (e) => { e.preventDefault(); window.open(chrome.runtime.getURL('settings.html'), '_blank'); };
-        if (scanNewBtn) scanNewBtn.onclick = () => { scanTransactions(false); };
-        if (scanFullBtn) scanFullBtn.onclick = () => { if (confirm('Are you sure you want to perform a full scan? This will reset your current totals and re-scan everything.')) { scanTransactions(true); } };
+        if (scanNewBtn) {
+            scanNewBtn.style.background = state.scanType === 'new' ? '#00b06f' : '#34373a';
+            scanNewBtn.onmouseover = () => { scanNewBtn.style.background = state.scanType === 'new' ? '#00c87f' : '#404346'; };
+            scanNewBtn.onmouseout = () => { scanNewBtn.style.background = state.scanType === 'new' ? '#00b06f' : '#34373a'; };
+        }
+        
+        if (scanFullBtn) {
+            scanFullBtn.style.background = state.scanType === 'full' ? '#00b06f' : '#34373a';
+            scanFullBtn.onmouseover = () => { scanFullBtn.style.background = state.scanType === 'full' ? '#00c87f' : '#404346'; };
+            scanFullBtn.onmouseout = () => { scanFullBtn.style.background = state.scanType === 'full' ? '#00b06f' : '#34373a'; };
+        }
     }
 
     // Scan transactions
-    async function scanTransactions(isFullScan = false) {
+    async function scanTransactions(requestedFullScan = false) {
         if (state.isScanning) return;
         
         const settings = loadSettings();
         
-        if (isFullScan) {
-            resetState();
+        // Determine if we should be doing a full scan (either requested now or resuming an unfinished one)
+        let isFullScan = requestedFullScan || (state.scanType === 'full');
+        
+        if (requestedFullScan) {
+            resetState('full');
+            isFullScan = true;
             saveState();
+        } else if (!isFullScan) {
+            // For regular/new scans, ensure we start from the newest page
+            state.scanType = 'new';
+            state.lastCursor = ''; 
         }
         
         state.isScanning = true;
@@ -506,12 +476,12 @@ function initSalesTracker() {
                     const cursor = state.lastCursor ? `&cursor=${state.lastCursor}` : '';
                     const endpoint = `/v2/groups/${groupId}/transactions?limit=100&transactionType=Sale${cursor}`;
                     
-                    console.log('Sales Tracker: Fetching endpoint:', endpoint);
+                    console.log(`Sales Tracker: Fetching (${state.scanType}):`, endpoint);
                     const data = await callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
 
                     if (!data || !data.data || data.data.length === 0) {
                         console.log('Sales Tracker: No more transactions');
-                        state.lastCursor = ''; // Reset the cursor so next poll starts from newest sales
+                        state.lastCursor = ''; 
                         hasNextPage = false;
                         break;
                     }
@@ -520,19 +490,24 @@ function initSalesTracker() {
                     let shouldStop = false;
                     const now = new Date();
                     
-                    // Fixed: Using a for...of loop so 'break' properly stops execution
                     for (const transaction of data.data) {
                         if (!transaction.currency || typeof transaction.currency.amount !== 'number') continue;
                         
-                        const amount = transaction.currency.amount;
-                        const transactionDate = new Date(transaction.created);
-                        const transactionTimestamp = transactionDate.getTime();
+                        const txId = String(transaction.id || transaction.created);
+                        // Stop "new" scan if we hit an ID we already processed
+                        const isAlreadyProcessed = state.processedIds && state.processedIds.includes(txId);
                         
-                        // Break out if we hit a sale we have already processed
-                        if (!isFullScan && scanStartMostRecentTimestamp !== null && transactionTimestamp <= scanStartMostRecentTimestamp) {
+                        if (!isFullScan && isAlreadyProcessed) {
                             shouldStop = true;
                             break; 
                         }
+
+                        // Safeguard: Even if we don't "stop" yet, don't double count if ID is known
+                        if (isAlreadyProcessed && !isFullScan) continue;
+
+                        const amount = transaction.currency.amount;
+                        const transactionDate = new Date(transaction.created);
+                        const transactionTimestamp = transactionDate.getTime();
                         
                         if (maxTransactionTimestampSeen === null || transactionTimestamp > maxTransactionTimestampSeen) {
                             maxTransactionTimestampSeen = transactionTimestamp;
@@ -586,17 +561,27 @@ function initSalesTracker() {
                             }
                         });
                         
+                        // Add to processedIds to avoid double-counting in next "new" scan
+                        if (!isAlreadyProcessed) {
+                            state.processedIds.push(txId);
+                        }
+                        
                         processedCount++;
                     }
                     
+                    // Keep processedIds at a reasonable size (keep the NEWEST 1000)
+                    if (state.processedIds.length > 1000) {
+                        state.processedIds = state.processedIds.slice(0, 1000);
+                    }
+
                     if (shouldStop) {
                         hasNextPage = false;
-                        state.lastCursor = ''; // We caught up, reset cursor to grab new sales next time
+                        state.lastCursor = ''; 
                     } else if (data.nextPageCursor) {
                         state.lastCursor = data.nextPageCursor;
                         await new Promise(resolve => setTimeout(resolve, 500));
                     } else {
-                        state.lastCursor = ''; // Finished all history, reset cursor
+                        state.lastCursor = ''; 
                         hasNextPage = false;
                     }
 
@@ -620,9 +605,15 @@ function initSalesTracker() {
                 }
             }
             saveTransactionsForAnalytics();
+            
+            // If full scan finished successfully, switch back to new
+            if (state.scanType === 'full' && state.lastCursor === '') {
+                state.scanType = 'new';
+            }
         } finally {
             state.isScanning = false;
             updateDashboard();
+            saveState();
         }
     }
 
