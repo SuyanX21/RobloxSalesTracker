@@ -447,8 +447,9 @@ function initSalesTracker() {
         if (state.isScanning) return;
         
         const settings = loadSettings();
+        let newlyProcessedIds = [];
         
-        // Determine if we should be doing a full scan (either requested now or resuming an unfinished one)
+        // Determine if we should be doing a full scan
         let isFullScan = requestedFullScan || (state.scanType === 'full');
         
         if (requestedFullScan) {
@@ -486,29 +487,29 @@ function initSalesTracker() {
                         break;
                     }
 
-                    let processedCount = 0;
-                    let shouldStop = false;
+                    let processedCountInThisPage = 0;
+                    let shouldStopScan = false;
                     const now = new Date();
                     
                     for (const transaction of data.data) {
                         if (!transaction.currency || typeof transaction.currency.amount !== 'number') continue;
                         
                         const txId = String(transaction.id || transaction.created);
-                        // Stop "new" scan if we hit an ID we already processed
-                        const isAlreadyProcessed = state.processedIds && state.processedIds.includes(txId);
                         
+                        // Check if this transaction was ALREADY processed in this session or previous ones
+                        const isAlreadyProcessed = (state.processedIds && state.processedIds.includes(txId)) || newlyProcessedIds.includes(txId);
+                        
+                        // In "Scan New" mode, we stop as soon as we hit a transaction we've already seen
                         if (!isFullScan && isAlreadyProcessed) {
-                            shouldStop = true;
+                            shouldStopScan = true;
                             console.log('Sales Tracker: Hit processed ID, stopping scan:', txId);
                             break; 
                         }
 
-                        // Safeguard: Even if we don't "stop" yet, don't double count if ID is known
-                        if (isAlreadyProcessed && !isFullScan) continue;
+                        // CRITICAL: Even in Full Scan (or if we didn't stop), NEVER count the same ID twice
+                        if (isAlreadyProcessed) continue;
 
                         const amount = transaction.currency.amount;
-                        // Skip zero-amount transactions if they aren't true sales (e.g. some internal adjustments)
-                        // but usually sales are > 0.
                         if (amount <= 0 && isFullScan) continue; 
 
                         const transactionDate = new Date(transaction.created);
@@ -522,6 +523,7 @@ function initSalesTracker() {
                             oldestDate = transactionDate;
                         }
 
+                        // Increment totals
                         state.allTime.count++;
                         state.allTime.robux += amount;
 
@@ -556,7 +558,7 @@ function initSalesTracker() {
                         }
                         
                         collectedTransactions.push({
-                            id: transaction.id || `${transactionDate.getTime()}_${Math.random()}`,
+                            id: txId,
                             created: transaction.created,
                             currency: { amount: amount },
                             details: {
@@ -566,20 +568,12 @@ function initSalesTracker() {
                             }
                         });
                         
-                        // Add to processedIds at the BEGINNING so they are kept during slice
-                        if (!isAlreadyProcessed) {
-                            state.processedIds.unshift(txId);
-                        }
-                        
-                        processedCount++;
+                        // Track that we processed this ID in this run
+                        newlyProcessedIds.push(txId);
+                        processedCountInThisPage++;
                     }
                     
-                    // Keep processedIds at a reasonable size (keep the NEWEST 2000)
-                    if (state.processedIds.length > 2000) {
-                        state.processedIds = state.processedIds.slice(0, 2000);
-                    }
-
-                    if (shouldStop) {
+                    if (shouldStopScan) {
                         hasNextPage = false;
                         state.lastCursor = ''; 
                     } else if (data.nextPageCursor) {
@@ -590,12 +584,13 @@ function initSalesTracker() {
                         hasNextPage = false;
                     }
 
-                    console.log(`Sales Tracker: Processed ${processedCount} transactions`);
+                    console.log(`Sales Tracker: Processed ${processedCountInThisPage} transactions on this page`);
                     
                     if (oldestDate) state.oldestSaleDate = oldestDate.toISOString();
                     if (maxTransactionTimestampSeen !== null) state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
                     
                     updateDashboard();
+                    // Intermediate save to keep progress
                     saveState();
 
                 } catch (error) {
@@ -611,11 +606,15 @@ function initSalesTracker() {
             }
             saveTransactionsForAnalytics();
             
-            // If full scan finished successfully, switch back to new
             if (state.scanType === 'full' && state.lastCursor === '') {
                 state.scanType = 'new';
             }
         } finally {
+            // Update the master list of processed IDs, keeping newest first
+            if (newlyProcessedIds.length > 0) {
+                state.processedIds = [...newlyProcessedIds, ...(state.processedIds || [])].slice(0, 10000);
+            }
+            
             state.isScanning = false;
             updateDashboard();
             saveState();
