@@ -76,7 +76,7 @@ function initSalesTracker() {
         pending72h: { count: 0, robux: 0 },
         totalPending: { count: 0, robux: 0 },
         scanType: 'new',
-        processedIds: [], // Store last ~500 processed transaction IDs
+        processedIds: new Set(), // Store last ~500 processed transaction IDs
     };
 
     // Collected transactions for analytics dashboard
@@ -129,7 +129,7 @@ function initSalesTracker() {
                 }
                 parsed.isScanning = false;
                 state = { ...state, ...parsed };
-                if (!state.processedIds) state.processedIds = [];
+                state.processedIds = new Set(state.processedIds || []);
             } catch (error) {
                 console.warn('Sales Tracker: Failed to parse saved state, resetting.', error);
             }
@@ -151,17 +151,18 @@ function initSalesTracker() {
             pending72h: { count: 0, robux: 0 },
             totalPending: { count: 0, robux: 0 },
             scanType: newType,
-            processedIds: [],
+            processedIds: new Set(),
         };
     }
     
     // Save state to localStorage
     function saveState() {
-        localStorage.setItem(`sales_tracker_${groupId}`, JSON.stringify(state));
+        const stateToSave = { ...state, processedIds: Array.from(state.processedIds || new Set()) };
+        localStorage.setItem(`sales_tracker_${groupId}`, JSON.stringify(stateToSave));
         
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.set({
-                [`sales_tracker_${groupId}`]: state
+                [`sales_tracker_${groupId}`]: stateToSave
             });
         }
     }
@@ -499,7 +500,7 @@ function initSalesTracker() {
                         const txId = transaction.id ? String(transaction.id) : `fb_${transaction.created}_${transaction.currency.amount}_${transaction.details ? transaction.details.id : ''}`;
                         
                         // Check if this transaction was ALREADY processed in this session or previous ones
-                        const isAlreadyProcessed = (state.processedIds && state.processedIds.includes(txId)) || newlyProcessedIds.includes(txId);
+                        const isAlreadyProcessed = (state.processedIds && state.processedIds.has(txId)) || newlyProcessedIds.includes(txId);
                         
                         // In "Scan New" mode, we mark that we should stop, but we FINISH the page first
                         // This handles out-of-order transactions or slight API caching issues.
@@ -616,7 +617,9 @@ function initSalesTracker() {
         } finally {
             // Update the master list of processed IDs, keeping newest first
             if (newlyProcessedIds.length > 0) {
-                state.processedIds = [...newlyProcessedIds, ...(state.processedIds || [])].slice(0, 10000);
+                const combinedIds = [...newlyProcessedIds, ...state.processedIds];
+                const trimmedIds = combinedIds.slice(0, 10000);
+                state.processedIds = new Set(trimmedIds);
             }
             
             state.isScanning = false;
