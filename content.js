@@ -445,6 +445,13 @@ function initSalesTracker() {
 
     // Scan transactions
     async function scanTransactions(requestedFullScan = false) {
+        const today = new Date().toDateString();
+        if (state.lastResetDate !== today) {
+            state.today = { count: 0, robux: 0 };
+            state.lastResetDate = today;
+            saveState();
+        }
+
         if (state.isScanning) return;
         
         const settings = loadSettings();
