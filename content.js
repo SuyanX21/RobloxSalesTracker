@@ -130,6 +130,8 @@ function initSalesTracker() {
                 parsed.isScanning = false;
                 state = { ...state, ...parsed };
                 state.processedIds = new Set(state.processedIds || []);
+                // FIX: Prune past7Days on load
+                prunePast7DaysCounters().catch(console.error);
             } catch (error) {
                 console.warn('Sales Tracker: Failed to parse saved state, resetting.', error);
             }
@@ -232,6 +234,49 @@ function initSalesTracker() {
         } catch (e) {
             return date.toDateString() === new Date().toDateString();
         }
+    }
+
+    // FIX: Recalculate past7Days counters accurately by scanning recent history
+    async function prunePast7DaysCounters() {
+        console.log('Sales Tracker: Pruning past7Days counters...');
+        const settings = loadSettings();
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        
+        let tempPast7Days = { count: 0, robux: 0 };
+        let cursor = '';
+        let pageCount = 0;
+        const maxPages = 50; // ~14 days safety margin
+        
+        try {
+            while (pageCount < maxPages) {
+                const endpointCursor = cursor ? `&cursor=${cursor}` : '';
+                const endpoint = `/v2/groups/${groupId}/transactions?limit=100&transactionType=Sale${endpointCursor}`;
+                const data = await callRobloxApiJson({ subdomain: 'economy', endpoint });
+                
+                if (!data?.data?.length) break;
+                
+                for (const txn of data.data) {
+                    if (!txn.currency || typeof txn.currency.amount !== 'number') continue;
+                    const txnDate = new Date(txn.created);
+                    if (txnDate >= sevenDaysAgo) {
+                        tempPast7Days.count += 1;
+                        tempPast7Days.robux += txn.currency.amount;
+                    }
+                }
+                
+                if (!data.nextPageCursor) break;
+                cursor = data.nextPageCursor;
+                pageCount++;
+                await new Promise(r => setTimeout(r, 300)); // Rate limit
+            }
+        } catch (error) {
+            console.warn('Prune past7Days failed:', error);
+            // Keep existing counters on error to avoid breaking display
+            return;
+        }
+        
+        state.past7Days = tempPast7Days;
+        console.log(`Past7Days recalculated: ${tempPast7Days.count} sales, R$ ${tempPast7Days.robux.toLocaleString()}`);
     }
 
     // Create dashboard UI
@@ -630,6 +675,8 @@ function initSalesTracker() {
             }
             
             state.isScanning = false;
+            // FIX: Recalculate past7Days after scan
+            await prunePast7DaysCounters();
             updateDashboard();
             saveState();
         }
