@@ -1,660 +1,94 @@
-// API Module - Inline
-console.log('Sales Tracker: Script loaded');
+(function initSalesTrackerBootstrap() {
+    var ST = window.SalesTracker = window.SalesTracker || {};
 
-async function callRobloxApiJson({ subdomain = 'apis', endpoint }) {
-    try {
-        const url = new URL(endpoint, `https://${subdomain}.roblox.com`);
-        // Add cache buster to bypass potential API caching
-        url.searchParams.set('_t', Date.now());
-        
-        const response = await fetch(url.toString(), {
-            method: 'GET',
-            credentials: 'include',
-        });
-        
-        if (response.status === 429) {
-            const error = new Error('Rate limited');
-            error.status = 429;
-            throw error;
+    function initSalesTracker() {
+        if (
+            !ST.getGroupIdFromUrl ||
+            !ST.createInitialState ||
+            !ST.createDefaultSettings ||
+            !ST.createStorageController ||
+            !ST.createDashboard ||
+            !ST.updateDashboard ||
+            !ST.createScanTransactions ||
+            !ST.callRobloxApiJson ||
+            !ST.isSameDayInTimezone ||
+            !ST.robuxToCurrency
+        ) {
+            console.error('Sales Tracker: Missing required modules.');
+            return;
         }
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+        var groupId = ST.getGroupIdFromUrl();
+        if (!groupId) {
+            return;
         }
-        
-        return await response.json();
-    } catch (error) {
-        if (error.status) throw error;
-        throw new Error(error.message);
-    }
-}
 
-// Simple DOMPurify fallback with basic sanitization
-const DOMPurify = {
-    sanitize: (html) => {
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        const dangerous = temp.querySelectorAll('script, iframe, object, embed, form');
-        dangerous.forEach(el => el.remove());
-        const allElements = temp.querySelectorAll('*');
-        allElements.forEach(el => {
-            const attrs = Array.from(el.attributes);
-            attrs.forEach(attr => {
-                if (attr.name.startsWith('on') || attr.name === 'href' || attr.name === 'src') {
-                    el.removeAttribute(attr.name);
-                }
-            });
-        });
-        return temp.innerHTML;
-    }
-};
-
-// Get Group ID from URL
-function getGroupIdFromUrl() {
-    let match = window.location.href.match(/[?&]id=(\d+)/);
-    if (!match) match = window.location.href.match(/groups\/(\d+)/);
-    console.log('Sales Tracker: Group ID from URL:', match ? match[1] : null);
-    return match ? match[1] : null;
-}
-
-// Initialize Sales Tracker
-function initSalesTracker() {
-    const groupId = getGroupIdFromUrl();
-    if (!groupId) return;
-
-    // Dashboard state
-    let state = {
-        today: { count: 0, robux: 0 },
-        past7Days: { count: 0, robux: 0 },
-        allTime: { count: 0, robux: 0 },
-        lastCursor: '',
-        isScanning: false,
-        lastResetDate: new Date().toDateString(),
-        oldestSaleDate: null,
-        mostRecentTransactionTimestamp: null,
-        pending24h: { count: 0, robux: 0 },
-        pending72h: { count: 0, robux: 0 },
-        totalPending: { count: 0, robux: 0 },
-        scanType: 'new',
-        processedIds: new Set(), // Store last ~500 processed transaction IDs
-    };
-
-    // Collected transactions for analytics dashboard
-    let collectedTransactions = [];
-
-    // Load settings from chrome.storage.local
-    let settingsCache = {
-        showConversion: true,
-        currency: 'USD',
-        showNotifications: false,
-        darkMode: false,
-        timeZone: 'UTC',
-    };
-
-    function loadSettings() {
-        return settingsCache;
-    }
-
-    // Initialize settings from storage
-    function initializeSettings() {
-        chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode', 'timeZone'], (result) => {
-            settingsCache = {
-                showConversion: result.showConversion !== false,
-                currency: result.currency || 'USD',
-                showNotifications: result.showNotifications === true,
-                darkMode: result.darkMode === true,
-                timeZone: result.timeZone || 'UTC',
-            };
-            updateDashboard();
-        });
-    }
-
-    // Listen for storage changes from settings page
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName === 'local' && (changes.showConversion || changes.currency || changes.showNotifications || changes.darkMode || changes.timeZone)) {
-            initializeSettings();
-        }
-    });
-
-    // Load saved state
-    function loadState() {
-        const saved = localStorage.getItem(`sales_tracker_${groupId}`);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                const today = new Date().toDateString();
-                if (parsed.lastResetDate !== today) {
-                    parsed.today = { count: 0, robux: 0 };
-                    parsed.lastResetDate = today;
-                }
-                parsed.isScanning = false;
-                state = { ...state, ...parsed };
-                state.processedIds = new Set(state.processedIds || []);
-            } catch (error) {
-                console.warn('Sales Tracker: Failed to parse saved state, resetting.', error);
-            }
-        }
-    }
-    
-    // Reset state helper
-    function resetState(newType = 'new') {
-        state = {
-            today: { count: 0, robux: 0 },
-            past7Days: { count: 0, robux: 0 },
-            allTime: { count: 0, robux: 0 },
-            lastCursor: '',
-            isScanning: false,
-            lastResetDate: new Date().toDateString(),
-            oldestSaleDate: null,
-            mostRecentTransactionTimestamp: null,
-            pending24h: { count: 0, robux: 0 },
-            pending72h: { count: 0, robux: 0 },
-            totalPending: { count: 0, robux: 0 },
-            scanType: newType,
-            processedIds: new Set(),
+        var tracker = {
+            groupId: groupId,
+            state: ST.createInitialState('new'),
+            collectedTransactions: [],
+            settingsCache: ST.createDefaultSettings()
         };
-    }
-    
-    // Save state to localStorage
-    function saveState() {
-        const stateToSave = { ...state, processedIds: Array.from(state.processedIds || new Set()) };
-        localStorage.setItem(`sales_tracker_${groupId}`, JSON.stringify(stateToSave));
-        
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.set({
-                [`sales_tracker_${groupId}`]: stateToSave
+
+        var storage = ST.createStorageController(tracker, {
+            callRobloxApiJson: ST.callRobloxApiJson
+        });
+
+        var updateDashboard = function updateDashboard() {
+            ST.updateDashboard(tracker, {
+                loadSettings: storage.loadSettings,
+                robuxToCurrency: ST.robuxToCurrency
             });
-        }
-    }
+        };
 
-    // Save transactions for analytics dashboard
-    function saveTransactionsForAnalytics() {
-        if (collectedTransactions.length === 0) return;
-        
-        var storageKey = 'salestrack_cache';
-        
-        function doSave(existingData) {
-            var existingTx = [];
-            if (existingData) {
-                try {
-                    existingTx = JSON.parse(existingData);
-                    if (!Array.isArray(existingTx)) existingTx = [];
-                } catch (e) {
-                    existingTx = [];
+        var scanTransactions = ST.createScanTransactions(tracker, {
+            callRobloxApiJson: ST.callRobloxApiJson,
+            loadSettings: storage.loadSettings,
+            saveState: storage.saveState,
+            saveTransactionsForAnalytics: storage.saveTransactionsForAnalytics,
+            updateDashboard: updateDashboard,
+            resetState: storage.resetState,
+            prunePast7DaysCounters: storage.prunePast7DaysCounters,
+            isSameDayInTimezone: ST.isSameDayInTimezone
+        });
+
+        var createDashboard = function createDashboard() {
+            return ST.createDashboard(tracker, {
+                loadSettings: storage.loadSettings,
+                sanitizeHtml: ST.DOMPurify && ST.DOMPurify.sanitize,
+                resetState: storage.resetState,
+                saveState: storage.saveState,
+                updateDashboard: updateDashboard,
+                onScanNew: function onScanNew() {
+                    scanTransactions(false);
+                },
+                onScanFull: function onScanFull() {
+                    scanTransactions(true);
                 }
-            }
-            
-            var merged = collectedTransactions.slice();
-            var existingIds = new Set(collectedTransactions.map(function(tx) { return tx.id; }));
-            for (var i = 0; i < existingTx.length; i++) {
-                var tx = existingTx[i];
-                if (!existingIds.has(tx.id)) {
-                    merged.push(tx);
-                }
-            }
-            
-            merged.sort(function(a, b) { return new Date(b.created) - new Date(a.created); });
-            var trimmed = merged.slice(0, 10000);
-            
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.set({ salestrack_cache: trimmed }, function() {
-                    console.log('Sales Tracker: Saved', trimmed.length, 'transactions to salestrack_cache for analytics');
-                });
-            } else {
-                try {
-                    localStorage.setItem('salestrack_cache', JSON.stringify(trimmed));
-                    console.log('Sales Tracker: Saved', trimmed.length, 'transactions to salestrack_cache for analytics');
-                } catch (error) {
-                    console.warn('Sales Tracker: Failed to save transactions for analytics:', error);
-                }
-            }
-            
-            collectedTransactions = [];
-        }
-        
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.get(['salestrack_cache'], function(result) {
-                doSave(result.salestrack_cache ? JSON.stringify(result.salestrack_cache) : null);
             });
-        } else {
-            var existing = localStorage.getItem('salestrack_cache');
-            doSave(existing);
-        }
-    }
+        };
 
-    // Helper to check if a date is "today" in a specific timezone
-    function isSameDayInTimezone(date, timezone) {
-        try {
-            const options = { timeZone: timezone, year: 'numeric', month: 'numeric', day: 'numeric' };
-            const nowStr = new Date().toLocaleDateString('en-US', options);
-            const dateStr = date.toLocaleDateString('en-US', options);
-            return nowStr === dateStr;
-        } catch (e) {
-            return date.toDateString() === new Date().toDateString();
-        }
-    }
+        storage.loadState();
+        storage.initializeSettings(updateDashboard);
+        storage.installSettingsListener(updateDashboard);
 
-    // Create dashboard UI
-    function createDashboard() {
-        const dashboard = document.createElement('div');
-        dashboard.id = 'sales-dashboard';
-        dashboard.style.cssText = `
-            position: fixed;
-            top: 100px;
-            right: 20px;
-            width: 320px;
-            background: #1b1d1f;
-            border-radius: 6px;
-            color: #ffffff;
-            padding: 20px;
-            z-index: 100000;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
-            border: 1px solid #393b3d;
-        `;
+        console.log('Sales Tracker initialized for group:', groupId);
 
-        const settings = loadSettings();
-        const todayStr = new Date().toLocaleDateString('de-DE', { timeZone: settings.timeZone });
-
-        const html = `
-            <a href="#" id="tracker-help-btn" title="What is this?" style="position: absolute; top: 12px; right: 12px; text-decoration: none; color: #aaa; font-size: 20px; background: #252729; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer; transition: background 0.2s;">
-                <span style="font-weight: bold;">?</span>
-            </a>
-            <a href="#" id="tracker-settings-btn" title="Settings" style="position: absolute; top: 12px; right: 48px; text-decoration: none; color: #aaa; font-size: 20px; background: #252729; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer; transition: background 0.2s;">
-                <span style="font-weight: bold;">&#9881;</span>
-            </a>
-            <div style="font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #ffffff;">Roblox Sales Tracker</div> 
-            <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">
-                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Today (<span id="today-label">${todayStr}</span>)</div>
-                <div style="font-size: 16px; margin-top: 8px; color: #ffffff;">Sales: <b id="today-count">0</b></div>
-                <div style="font-size: 18px; color: #00b06f; font-weight: bold;"><b id="today-robux">R$ 0</b> <span id="today-conversion" style="font-size:12px; color:#aaa; margin-left:6px;"></span></div>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Past 7 Days</div>
-                <div style="font-size: 16px; margin-top: 8px; color: #ffffff;">Total Sales: <b id="days7-count">0</b></div>
-                <div style="font-size: 16px; color: #ffb800;"><b>Estimated: <span id="days7-robux">R$ 0</span> <span id="days7-conversion" style="font-size:12px; color:#aaa; margin-left:6px;"></span></b></div>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">All Time</div>
-                <div style="font-size: 12px; color: #888; margin-bottom: 8px;">Oldest logged: <span style="color: #ffb800;" id="alltime-start">Loading...</span></div>
-                <div style="font-size: 16px; margin-top: 4px; color: #ffffff;">Total Sales: <b id="alltime-count">0</b></div>
-                <div style="font-size: 16px; color: #ffb800;"><b>Estimated: <span id="alltime-robux">R$ 0</span> <span id="alltime-conversion" style="font-size:12px; color:#aaa; margin-left:6px;"></span></b></div>
-            </div>
-            <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">
-                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Pending Revenue (P-R-P)</div>
-                <div style="font-size: 14px; margin-top: 12px; color: #ffffff;">Next 24h: <b id="pending24h-robux" style="color: #ff6b6b;">R$ 0</b> <span id="pending24h-conversion" style="font-size:11px; color:#aaa; margin-left:6px;"></span></div>
-                <div style="font-size: 14px; margin-top: 8px; color: #ffffff;">Next 72h: <b id="pending72h-robux" style="color: #ffa726;">R$ 0</b> <span id="pending72h-conversion" style="font-size:11px; color:#aaa; margin-left:6px;"></span></div>
-                <div style="font-size: 14px; margin-top: 8px; color: #ffffff;">Total Pending: <b id="totalpending-robux" style="color: #64b5f6;">R$ 0</b> <span id="totalpending-conversion" style="font-size:11px; color:#aaa; margin-left:6px;"></span></div>
-                <div style="font-size: 12px; color: #aaa; margin-top: 8px; text-align: center;">Est. 30-day escrow</div>
-            </div>
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                <button id="scan-new-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;">Scan New</button>
-                <button id="scan-full-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;">Full Scan</button>
-            </div>
-            <button id="open-analytics-btn" style="width: 100%; padding: 14px 16px; background: #00b06f; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 16px; cursor: pointer; margin-bottom: 10px;">Open Analytics</button>
-            <button id="donate-tracker-btn" style="width: 100%; padding: 14px 16px; background: #ffb800; border: none; border-radius: 6px; color: #000; font-weight: bold; font-size: 16px; cursor: pointer; margin-bottom: 12px; transition: background 0.2s;" onmouseover="this.style.background='#ffa500'" onmouseout="this.style.background='#ffb800'">Donate</button>
-            <div id="reset-tracker" style="color: #ff0000; font-size: 13px; cursor: pointer; text-align: center; opacity: 0.8; font-weight: 600;">reset</div>
-        `;
-
-        dashboard.innerHTML = DOMPurify.sanitize(html);
-
-        dashboard.querySelector('#tracker-help-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            window.open(chrome.runtime.getURL('help.html'), '_blank');
-        });
-
-        dashboard.querySelector('#tracker-settings-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            window.open(chrome.runtime.getURL('settings.html'), '_blank');
-        });
-
-        dashboard.querySelector('#reset-tracker').addEventListener('click', () => {
-            resetState();
-            saveState();
+        if (!document.getElementById('sales-dashboard')) {
+            var dashboard = createDashboard();
+            document.body.appendChild(dashboard);
             updateDashboard();
-        });
-
-        dashboard.querySelector('#scan-new-btn').addEventListener('click', () => {
-            scanTransactions(false);
-        });
-
-        dashboard.querySelector('#scan-full-btn').addEventListener('click', () => {
-            if (confirm('Are you sure you want to perform a full scan? This will reset your current totals and re-scan everything.')) {
-                scanTransactions(true);
-            }
-        });
-
-        dashboard.querySelector('#open-analytics-btn').addEventListener('click', () => {
-            window.open(chrome.runtime.getURL('analytics.html'), '_blank');
-        });
-
-        dashboard.querySelector('#donate-tracker-btn').addEventListener('click', () => {
-            window.open(chrome.runtime.getURL('donate.html'), '_blank');
-        });
-
-        return dashboard;
-    }
-
-    // Conversion function
-    function robuxToCurrency(robux, currency) {
-        if (!robux || robux < 1) return '';
-        let usd = robux / 10000 * 38;
-        let eur = robux / 10000 * 32.5;
-        if (currency === 'USD') return `$${usd.toFixed(2)} USD`;
-        if (currency === 'EUR') return `EUR ${eur.toFixed(2)}`;
-        return `$${usd.toFixed(2)} USD`;
-    }
-
-    // Update dashboard display
-    function updateDashboard() {
-        const dashboard = document.getElementById('sales-dashboard') || document.getElementById('rbx-sales-tracker-minimal');
-        if (!dashboard) return;
-
-        const settings = loadSettings();
-
-        const todayLabel = dashboard.querySelector('#today-label');
-        if (todayLabel) {
-            try {
-                todayLabel.textContent = new Date().toLocaleDateString('de-DE', { timeZone: settings.timeZone });
-            } catch (e) {
-                todayLabel.textContent = new Date().toLocaleDateString('de-DE');
-            }
-        }
-
-        const todayCount = dashboard.querySelector('#today-count');
-        const todayRobux = dashboard.querySelector('#today-robux'); 
-        const days7Count = dashboard.querySelector('#days7-count');
-        const days7Robux = dashboard.querySelector('#days7-robux');
-        const alltimeCount = dashboard.querySelector('#alltime-count');
-        const alltimeRobux = dashboard.querySelector('#alltime-robux');
-        const alltimeStart = dashboard.querySelector('#alltime-start');
-        
-        const todayConversion = dashboard.querySelector('#today-conversion');
-        const days7Conversion = dashboard.querySelector('#days7-conversion');
-        const alltimeConversion = dashboard.querySelector('#alltime-conversion');
-        
-        const pending24hRobux = dashboard.querySelector('#pending24h-robux');
-        const pending72hRobux = dashboard.querySelector('#pending72h-robux');
-        const totalPendingRobux = dashboard.querySelector('#totalpending-robux');
-        const pending24hConversion = dashboard.querySelector('#pending24h-conversion');
-        const pending72hConversion = dashboard.querySelector('#pending72h-conversion');
-        const totalPendingConversion = dashboard.querySelector('#totalpending-conversion');
-
-        if (todayCount) todayCount.textContent = state.today.count.toLocaleString();
-        if (todayRobux) todayRobux.textContent = `R$ ${state.today.robux.toLocaleString()}`;
-        if (days7Count) days7Count.textContent = state.past7Days.count.toLocaleString();
-        if (days7Robux) days7Robux.textContent = `R$ ${state.past7Days.robux.toLocaleString()}`;
-        if (alltimeCount) alltimeCount.textContent = state.allTime.count.toLocaleString();
-        if (alltimeRobux) alltimeRobux.textContent = `R$ ${state.allTime.robux.toLocaleString()}`;
-        
-        if (alltimeStart) {
-            if (state.oldestSaleDate) {
-                const dateObj = new Date(state.oldestSaleDate);
-                const dateOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-                try {
-                    alltimeStart.textContent = dateObj.toLocaleDateString(undefined, { ...dateOptions, timeZone: settings.timeZone });
-                } catch (e) {
-                    alltimeStart.textContent = dateObj.toLocaleDateString(undefined, dateOptions);
-                }
-            } else {
-                alltimeStart.textContent = 'Scanning history...';
-            }
-        }
-
-        if (settings.showConversion) {
-            if (todayConversion) todayConversion.textContent = robuxToCurrency(state.today.robux, settings.currency);
-            if (days7Conversion) days7Conversion.textContent = robuxToCurrency(state.past7Days.robux, settings.currency);
-            if (alltimeConversion) alltimeConversion.textContent = robuxToCurrency(state.allTime.robux, settings.currency);
-            if (pending24hConversion) pending24hConversion.textContent = robuxToCurrency(state.pending24h.robux, settings.currency);
-            if (pending72hConversion) pending72hConversion.textContent = robuxToCurrency(state.pending72h.robux, settings.currency);
-            if (totalPendingConversion) totalPendingConversion.textContent = robuxToCurrency(state.totalPending.robux, settings.currency);
         } else {
-            if (todayConversion) todayConversion.textContent = '';
-            if (days7Conversion) days7Conversion.textContent = '';
-            if (alltimeConversion) alltimeConversion.textContent = '';
-            if (pending24hConversion) pending24hConversion.textContent = '';
-            if (pending72hConversion) pending72hConversion.textContent = '';
-            if (totalPendingConversion) totalPendingConversion.textContent = '';
-        }
-
-        if (pending24hRobux) pending24hRobux.textContent = `R$ ${state.pending24h.robux.toLocaleString()}`;
-        if (pending72hRobux) pending72hRobux.textContent = `R$ ${state.pending72h.robux.toLocaleString()}`;
-        if (totalPendingRobux) totalPendingRobux.textContent = `R$ ${state.totalPending.robux.toLocaleString()}`;
-
-        if (settings.darkMode) {
-            dashboard.style.background = '#0d0e0f';
-        } else {
-            dashboard.style.background = '#1b1d1f';
-        }
-
-        const scanNewBtn = dashboard.querySelector('#scan-new-btn');
-        const scanFullBtn = dashboard.querySelector('#scan-full-btn');
-        
-        if (scanNewBtn) {
-            scanNewBtn.style.background = state.scanType === 'new' ? '#00b06f' : '#34373a';
-            scanNewBtn.onmouseover = () => { scanNewBtn.style.background = state.scanType === 'new' ? '#00c87f' : '#404346'; };
-            scanNewBtn.onmouseout = () => { scanNewBtn.style.background = state.scanType === 'new' ? '#00b06f' : '#34373a'; };
-        }
-        
-        if (scanFullBtn) {
-            scanFullBtn.style.background = state.scanType === 'full' ? '#00b06f' : '#34373a';
-            scanFullBtn.onmouseover = () => { scanFullBtn.style.background = state.scanType === 'full' ? '#00c87f' : '#404346'; };
-            scanFullBtn.onmouseout = () => { scanFullBtn.style.background = state.scanType === 'full' ? '#00b06f' : '#34373a'; };
-        }
-    }
-
-    // Scan transactions
-    async function scanTransactions(requestedFullScan = false) {
-        const today = new Date().toDateString();
-        if (state.lastResetDate !== today) {
-            state.today = { count: 0, robux: 0 };
-            state.lastResetDate = today;
-            saveState();
-        }
-
-        if (state.isScanning) return;
-        
-        const settings = loadSettings();
-        let newlyProcessedIds = [];
-        
-        // Determine if we should be doing a full scan
-        let isFullScan = requestedFullScan || (state.scanType === 'full');
-        
-        if (requestedFullScan) {
-            resetState('full');
-            isFullScan = true;
-            saveState();
-        } else if (!isFullScan) {
-            // For regular/new scans, ensure we start from the newest page
-            state.scanType = 'new';
-            state.lastCursor = ''; 
-        }
-        
-        state.isScanning = true;
-        updateDashboard();
-
-        try {
-            let hasNextPage = true;
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            const scanStartMostRecentTimestamp = state.mostRecentTransactionTimestamp;
-            let maxTransactionTimestampSeen = scanStartMostRecentTimestamp;
-            let oldestDate = state.oldestSaleDate ? new Date(state.oldestSaleDate) : null;
-            
-            while (hasNextPage) {
-                try {
-                    const cursor = state.lastCursor ? `&cursor=${state.lastCursor}` : '';
-                    const endpoint = `/v2/groups/${groupId}/transactions?limit=100&transactionType=Sale${cursor}`;
-                    
-                    console.log(`Sales Tracker: Fetching (${state.scanType}):`, endpoint);
-                    const data = await callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
-
-                    if (!data || !data.data || data.data.length === 0) {
-                        console.log('Sales Tracker: No more transactions');
-                        state.lastCursor = ''; 
-                        hasNextPage = false;
-                        break;
-                    }
-
-                    let processedCountInThisPage = 0;
-                    let shouldStopScan = false;
-                    let hitsOnThisPage = 0;
-                    const now = new Date();
-                    
-                    for (const transaction of data.data) {
-                        if (!transaction.currency || typeof transaction.currency.amount !== 'number') continue;
-                        
-                        // Use a robust unique ID (Roblox ID or fallback to Timestamp + Amount + AssetID)
-                        const txId = transaction.id ? String(transaction.id) : `fb_${transaction.created}_${transaction.currency.amount}_${transaction.details ? transaction.details.id : ''}`;
-                        
-                        // Check if this transaction was ALREADY processed in this session or previous ones
-                        const isAlreadyProcessed = (state.processedIds && state.processedIds.has(txId)) || newlyProcessedIds.includes(txId);
-                        
-                        // In "Scan New" mode, we mark that we should stop, but we FINISH the page first
-                        // This handles out-of-order transactions or slight API caching issues.
-                        if (!isFullScan && isAlreadyProcessed) {
-                            shouldStopScan = true;
-                            hitsOnThisPage++;
-                            continue; 
-                        }
-
-                        // CRITICAL: Even in Full Scan (or if we didn't stop), NEVER count the same ID twice
-                        if (isAlreadyProcessed) continue;
-
-                        const amount = transaction.currency.amount;
-                        if (amount <= 0 && isFullScan) continue; 
-
-                        const transactionDate = new Date(transaction.created);
-                        const transactionTimestamp = transactionDate.getTime();
-                        
-                        if (maxTransactionTimestampSeen === null || transactionTimestamp > maxTransactionTimestampSeen) {
-                            maxTransactionTimestampSeen = transactionTimestamp;
-                        }
-                        
-                        if (!oldestDate || transactionDate < oldestDate) {
-                            oldestDate = transactionDate;
-                        }
-
-                        // Increment totals
-                        state.allTime.count++;
-                        state.allTime.robux += amount;
-
-                        if (transactionDate >= sevenDaysAgo) {
-                            state.past7Days.count++;
-                            state.past7Days.robux += amount;
-                        }
-
-                        if (isSameDayInTimezone(transactionDate, settings.timeZone)) {
-                            state.today.count++;
-                            state.today.robux += amount;
-                        }
-                        
-                        const releaseDate = new Date(transactionDate);
-                        releaseDate.setDate(releaseDate.getDate() + 30);
-                        const timeUntilRelease = releaseDate - now;
-                        const hoursUntilRelease = timeUntilRelease / (1000 * 60 * 60);
-                        
-                        if (timeUntilRelease > 0) {
-                            state.totalPending.count++;
-                            state.totalPending.robux += amount;
-                            
-                            if (hoursUntilRelease <= 24) {
-                                state.pending24h.count++;
-                                state.pending24h.robux += amount;
-                            }
-                            
-                            if (hoursUntilRelease <= 72) {
-                                state.pending72h.count++;
-                                state.pending72h.robux += amount;
-                            }
-                        }
-                        
-                        collectedTransactions.push({
-                            id: txId,
-                            created: transaction.created,
-                            currency: { amount: amount },
-                            details: {
-                                id: transaction.details && transaction.details.id ? String(transaction.details.id) : '',
-                                name: transaction.details && transaction.details.name ? transaction.details.name : 'Unknown Asset',
-                                type: transaction.details && transaction.details.type ? transaction.details.type : 'Unknown'
-                            }
-                        });
-                        
-                        // Track that we processed this ID in this run
-                        newlyProcessedIds.push(txId);
-                        processedCountInThisPage++;
-                    }
-                    
-                    if (shouldStopScan) {
-                        console.log(`Sales Tracker: Hit ${hitsOnThisPage} already-processed IDs on this page. Stopping scan after finishing this page.`);
-                        hasNextPage = false;
-                        state.lastCursor = ''; 
-                    } else if (data.nextPageCursor) {
-                        state.lastCursor = data.nextPageCursor;
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    } else {
-                        state.lastCursor = ''; 
-                        hasNextPage = false;
-                    }
-
-                    console.log(`Sales Tracker: Processed ${processedCountInThisPage} NEW transactions on this page`);
-                    
-                    if (oldestDate) state.oldestSaleDate = oldestDate.toISOString();
-                    if (maxTransactionTimestampSeen !== null) state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
-                    
-                    updateDashboard();
-                    // Intermediate save to keep progress
-                    saveState();
-
-                } catch (error) {
-                    if (error.status === 429) {
-                        console.log('Sales Tracker: Rate limited, waiting 10 seconds...');
-                        await new Promise(resolve => setTimeout(resolve, 10000));
-                        continue;
-                    } else {
-                        console.error('Sales Tracker Error:', error);
-                        hasNextPage = false;
-                    }
-                }
-            }
-            saveTransactionsForAnalytics();
-            
-            if (state.scanType === 'full' && state.lastCursor === '') {
-                state.scanType = 'new';
-            }
-        } finally {
-            // Update the master list of processed IDs, keeping newest first
-            if (newlyProcessedIds.length > 0) {
-                const combinedIds = [...newlyProcessedIds, ...state.processedIds];
-                const trimmedIds = combinedIds.slice(0, 10000);
-                state.processedIds = new Set(trimmedIds);
-            }
-            
-            state.isScanning = false;
             updateDashboard();
-            saveState();
         }
+
+        scanTransactions();
+        setInterval(scanTransactions, 10000);
     }
 
-    // Initialize
-    loadState();
-    initializeSettings();
-    console.log('Sales Tracker initialized for group:', groupId);
-    
-    if (!document.getElementById('sales-dashboard')) {
-        const dashboard = createDashboard();
-        document.body.appendChild(dashboard);
-        updateDashboard();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSalesTracker);
     } else {
-        updateDashboard();
+        initSalesTracker();
     }
-
-    scanTransactions();
-    // Decreased interval to 10 seconds (10000ms) for faster logging
-    setInterval(scanTransactions, 10000); 
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSalesTracker);
-} else {
-    initSalesTracker();
-}
+})();
