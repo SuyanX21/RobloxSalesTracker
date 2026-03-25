@@ -758,6 +758,8 @@
 
     async function boot() {
         await loadSettings();
+        
+        // Initial load
         readCachedTransactions().then(function(fromCache) {
             var fromWindow = [];
             if (Array.isArray(window.salestrackTransactions)) {
@@ -769,6 +771,20 @@
             bindEvents();
             render();
         });
+
+        // Listen for real-time updates from content script
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+            chrome.storage.onChanged.addListener(function(changes, areaName) {
+                if (areaName === 'local' && changes.salestrack_cache) {
+                    console.log('Analytics: Received real-time cache update');
+                    var newCache = changes.salestrack_cache.newValue;
+                    if (newCache) {
+                        state.transactions = normalizeTransactions(newCache);
+                        render();
+                    }
+                }
+            });
+        }
     }
 
     window.processAnalytics = processAnalytics;
