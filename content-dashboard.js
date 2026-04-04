@@ -4,20 +4,44 @@
     ST.createDashboard = function createDashboard(tracker, deps) {
         var dashboard = document.createElement('div');
         dashboard.id = 'sales-dashboard';
-        dashboard.style.cssText = [
-            'position: fixed;',
-            'top: 100px;',
-            'right: 20px;',
-            'width: 320px;',
-            'background: #1b1d1f;',
-            'border-radius: 6px;',
-            'color: #ffffff;',
-            'padding: 20px;',
-            'z-index: 100000;',
-            'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
-            'box-shadow: 0 4px 15px rgba(0,0,0,0.6);',
-            'border: 1px solid #393b3d;'
-        ].join(' ');
+        
+        function updateDashboardPosition() {
+            var windowHeight = window.innerHeight;
+            var windowWidth = window.innerWidth;
+            var dashboardWidth = 320;
+            var margin = 20;
+
+            // Ensure width doesn't exceed window width
+            var actualWidth = Math.min(dashboardWidth, windowWidth - (margin * 2));
+            
+            // Calculate best top position
+            var topPos = 100;
+            if (windowHeight < 600) {
+                topPos = margin;
+            }
+
+            dashboard.style.position = 'fixed';
+            dashboard.style.top = topPos + 'px';
+            dashboard.style.right = margin + 'px';
+            dashboard.style.width = actualWidth + 'px';
+            dashboard.style.maxHeight = (windowHeight - (topPos + margin)) + 'px';
+            dashboard.style.overflowY = 'auto';
+            dashboard.style.background = '#1b1d1f';
+            dashboard.style.borderRadius = '6px';
+            dashboard.style.color = '#ffffff';
+            dashboard.style.padding = '20px';
+            dashboard.style.zIndex = '100000';
+            dashboard.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+            dashboard.style.boxShadow = '0 4px 15px rgba(0,0,0,0.6)';
+            dashboard.style.border = '1px solid #393b3d';
+            
+            // Custom scrollbar for better look
+            dashboard.style.scrollbarWidth = 'thin';
+            dashboard.style.scrollbarColor = '#444 #1b1d1f';
+        }
+
+        updateDashboardPosition();
+        window.addEventListener('resize', updateDashboardPosition);
 
         var settings = deps.loadSettings();
         var todayStr = new Date().toLocaleDateString('de-DE', { timeZone: settings.timeZone });
@@ -30,6 +54,11 @@
             + '                <span style="font-weight: bold;">&#9881;</span>\n'
             + '            </a>\n'
             + '            <div style="font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #ffffff;">Roblox Sales Tracker</div> \n'
+            + '            <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px; border-left: 4px solid #00b06f;">\n'
+            + '                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Group Balance</div>\n'
+            + '                <div style="font-size: 22px; color: #ffffff; font-weight: bold; margin-top: 4px;"><b id="group-balance-robux">R$ 0</b></div>\n'
+            + '                <div id="group-balance-conversion" style="font-size:12px; color:#aaa; margin-top:2px;"></div>\n'
+            + '            </div>\n'
             + '            <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">\n'
             + '                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Today (<span id="today-label">' + todayStr + '</span>)</div>\n'
             + '                <div style="font-size: 16px; margin-top: 8px; color: #ffffff;">Sales: <b id="today-count">0</b></div>\n'
@@ -47,11 +76,13 @@
             + '                <div style="font-size: 16px; color: #ffb800;"><b>Estimated: <span id="alltime-robux">R$ 0</span> <span id="alltime-conversion" style="font-size:12px; color:#aaa; margin-left:6px;"></span></b></div>\n'
             + '            </div>\n'
             + '            <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">\n'
-            + '                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Pending Revenue (P-R-P)</div>\n'
-            + '                <div style="font-size: 14px; margin-top: 12px; color: #ffffff;">Next 24h: <b id="pending24h-robux" style="color: #ff6b6b;">R$ 0</b> <span id="pending24h-conversion" style="font-size:11px; color:#aaa; margin-left:6px;"></span></div>\n'
-            + '                <div style="font-size: 14px; margin-top: 8px; color: #ffffff;">Next 72h: <b id="pending72h-robux" style="color: #ffa726;">R$ 0</b> <span id="pending72h-conversion" style="font-size:11px; color:#aaa; margin-left:6px;"></span></div>\n'
-            + '                <div style="font-size: 14px; margin-top: 8px; color: #ffffff;">Total Pending: <b id="totalpending-robux" style="color: #64b5f6;">R$ 0</b> <span id="totalpending-conversion" style="font-size:11px; color:#aaa; margin-left:6px;"></span></div>\n'
-            + '                <div style="font-size: 12px; color: #aaa; margin-top: 8px; text-align: center;">Est. 30-day escrow</div>\n'
+            + '                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Pending Revenue</div>\n'
+            + '                <div style="font-size: 18px; margin-top: 8px; color: #64b5f6; font-weight: bold;">Actual: <b id="actual-pending-robux">R$ 0</b></div>\n'
+            + '                <div id="actual-pending-conversion" style="font-size:12px; color:#aaa; margin-bottom: 12px;"></div>\n'
+            + '                \n'
+            + '                <div style="font-size: 10px; color: #888; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; border-top: 1px solid #333; padding-top: 8px;">Breakdown (30-day Est.)</div>\n'
+            + '                <div style="font-size: 14px; color: #ffffff;">Next 24h: <b id="pending24h-robux" style="color: #ff6b6b;">R$ 0</b></div>\n'
+            + '                <div style="font-size: 14px; margin-top: 4px; color: #ffffff;">Next 72h: <b id="pending72h-robux" style="color: #ffa726;">R$ 0</b></div>\n'
             + '            </div>\n'
             + '            <div style="display: flex; gap: 8px; margin-bottom: 12px;">\n'
             + '                <button id="scan-new-btn" style="flex: 1; padding: 12px; background: #34373a; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s;">Scan New</button>\n'
@@ -153,12 +184,13 @@
         var days7Conversion = dashboard.querySelector('#days7-conversion');
         var alltimeConversion = dashboard.querySelector('#alltime-conversion');
 
+        var groupBalanceRobux = dashboard.querySelector('#group-balance-robux');
+        var groupBalanceConversion = dashboard.querySelector('#group-balance-conversion');
+        var actualPendingRobux = dashboard.querySelector('#actual-pending-robux');
+        var actualPendingConversion = dashboard.querySelector('#actual-pending-conversion');
+
         var pending24hRobux = dashboard.querySelector('#pending24h-robux');
         var pending72hRobux = dashboard.querySelector('#pending72h-robux');
-        var totalPendingRobux = dashboard.querySelector('#totalpending-robux');
-        var pending24hConversion = dashboard.querySelector('#pending24h-conversion');
-        var pending72hConversion = dashboard.querySelector('#pending72h-conversion');
-        var totalPendingConversion = dashboard.querySelector('#totalpending-conversion');
 
         if (todayCount) todayCount.textContent = state.today.count.toLocaleString();
         if (todayRobux) todayRobux.textContent = 'R$ ' + state.today.robux.toLocaleString();
@@ -166,6 +198,9 @@
         if (days7Robux) days7Robux.textContent = 'R$ ' + state.past7Days.robux.toLocaleString();
         if (alltimeCount) alltimeCount.textContent = state.allTime.count.toLocaleString();
         if (alltimeRobux) alltimeRobux.textContent = 'R$ ' + state.allTime.robux.toLocaleString();
+
+        if (groupBalanceRobux) groupBalanceRobux.textContent = 'R$ ' + (state.groupBalance || 0).toLocaleString();
+        if (actualPendingRobux) actualPendingRobux.textContent = 'R$ ' + (state.actualPendingRobux || 0).toLocaleString();
 
         if (alltimeStart) {
             if (state.oldestSaleDate) {
@@ -185,21 +220,18 @@
             if (todayConversion) todayConversion.textContent = deps.robuxToCurrency(state.today.robux, settings.currency);
             if (days7Conversion) days7Conversion.textContent = deps.robuxToCurrency(state.past7Days.robux, settings.currency);
             if (alltimeConversion) alltimeConversion.textContent = deps.robuxToCurrency(state.allTime.robux, settings.currency);
-            if (pending24hConversion) pending24hConversion.textContent = deps.robuxToCurrency(state.pending24h.robux, settings.currency);
-            if (pending72hConversion) pending72hConversion.textContent = deps.robuxToCurrency(state.pending72h.robux, settings.currency);
-            if (totalPendingConversion) totalPendingConversion.textContent = deps.robuxToCurrency(state.totalPending.robux, settings.currency);
+            if (groupBalanceConversion) groupBalanceConversion.textContent = deps.robuxToCurrency(state.groupBalance, settings.currency);
+            if (actualPendingConversion) actualPendingConversion.textContent = deps.robuxToCurrency(state.actualPendingRobux, settings.currency);
         } else {
             if (todayConversion) todayConversion.textContent = '';
             if (days7Conversion) days7Conversion.textContent = '';
             if (alltimeConversion) alltimeConversion.textContent = '';
-            if (pending24hConversion) pending24hConversion.textContent = '';
-            if (pending72hConversion) pending72hConversion.textContent = '';
-            if (totalPendingConversion) totalPendingConversion.textContent = '';
+            if (groupBalanceConversion) groupBalanceConversion.textContent = '';
+            if (actualPendingConversion) actualPendingConversion.textContent = '';
         }
 
         if (pending24hRobux) pending24hRobux.textContent = 'R$ ' + state.pending24h.robux.toLocaleString();
         if (pending72hRobux) pending72hRobux.textContent = 'R$ ' + state.pending72h.robux.toLocaleString();
-        if (totalPendingRobux) totalPendingRobux.textContent = 'R$ ' + state.totalPending.robux.toLocaleString();
 
         if (settings.darkMode) {
             dashboard.style.background = '#0d0e0f';

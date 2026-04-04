@@ -1,5 +1,5 @@
 // Background script for Roblox Sales Tracker
-// Handles message passing between content script and analytics dashboard hi
+// Handles message passing between content script and analytics dashboard
 
 // Listen for messages from analytics.js
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {

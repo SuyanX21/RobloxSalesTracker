@@ -211,6 +211,14 @@ th {
     color: var(--muted);
 }
 
+.net-profit {
+    color: var(--accent);
+}
+
+.net-loss {
+    color: var(--danger);
+}
+
 .pill {
     display: inline-block;
     border-radius: 999px;

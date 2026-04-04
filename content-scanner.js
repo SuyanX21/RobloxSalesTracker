@@ -39,6 +39,11 @@
             state.isScanning = true;
             deps.updateDashboard();
 
+            // Fetch actual currency balance and pending Robux from Roblox API
+            if (typeof deps.fetchGroupCurrency === 'function') {
+                await deps.fetchGroupCurrency();
+            }
+
             try {
                 var hasNextPage = true;
                 var sevenDaysAgo = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));

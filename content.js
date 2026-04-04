@@ -49,6 +49,7 @@
             updateDashboard: updateDashboard,
             resetState: storage.resetState,
             prunePast7DaysCounters: storage.prunePast7DaysCounters,
+            fetchGroupCurrency: storage.fetchGroupCurrency,
             isSameDayInTimezone: ST.isSameDayInTimezone
         });
 
@@ -83,7 +84,7 @@
         }
 
         scanTransactions();
-        setInterval(scanTransactions, 10000);
+        setInterval(scanTransactions, 60000);
     }
 
     if (document.readyState === 'loading') {

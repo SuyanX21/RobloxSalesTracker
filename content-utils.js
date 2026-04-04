@@ -43,6 +43,8 @@
             today: { count: 0, robux: 0 },
             past7Days: { count: 0, robux: 0 },
             allTime: { count: 0, robux: 0 },
+            groupBalance: 0,
+            actualPendingRobux: 0,
             lastCursor: '',
             isScanning: false,
             lastResetDate: new Date().toDateString(),

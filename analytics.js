@@ -84,12 +84,13 @@
         const amount = raw.currency.amount;
         const assetId = details.id == null ? '' : String(details.id);
         const assetName = String(details.name || 'Unknown Asset');
+        const assetType = String(details.type || 'Unknown');
 
         return {
             id: raw.id == null ? '' : String(raw.id),
             created: createdDate.toISOString(),
             currency: { amount },
-            details: { id: assetId, name: assetName },
+            details: { id: assetId, name: assetName, type: assetType },
         };
     }
 
@@ -245,6 +246,7 @@
                     assetKey: key,
                     assetName: tx.details.name || 'Unknown Asset',
                     assetId: tx.details.id || '',
+                    type: tx.details.type || 'Unknown',
                     unitsSold: 0,
                     grossRobux: 0,
                     periodA: 0,
@@ -263,6 +265,7 @@
             }
         }
 
+        let totalUploadCosts = 0;
         const assetMatrix = Array.from(assetMap.values()).map((row) => {
             const velocityPct = calculateVelocityPct(row.periodA, row.periodB);
             const marketSharePct = totalGross > 0 ? (row.grossRobux / totalGross) * 100 : 0;
@@ -275,7 +278,7 @@
             let uploadCost = 0;
             if (row.type === 'GamePass' || row.type === 'DeveloperProduct') {
                 uploadCost = 0; // Passes and DevProducts are free to upload
-            } else if (row.type === 'Asset') {
+            } else {
                 // If it's an Asset, we check the average price to guess if it's a Shirt or UGC
                 // Shirts/Pants usually sell for ~5 Robux. UGC is forced by Roblox to be at least 15+
                 const averagePrice = row.unitsSold > 0 ? (row.grossRobux / row.unitsSold) : 0;
@@ -285,6 +288,8 @@
                     uploadCost = 1750; // It's likely UGC
                 }
             }
+
+            totalUploadCosts += uploadCost;
 
             return {
                 assetKey: row.assetKey,
@@ -318,8 +323,7 @@
             .reduce((sum, item) => sum + item.grossRobux, 0);
         const whaleSharePct = totalGross > 0 ? (whaleRevenue / totalGross) * 100 : 0;
 
-        // Calculate total costs based on unique assets found
-        const totalUploadCosts = assetMap.size * 1750;
+        // Calculate total net using the aggregated upload costs
         const totalNet = totalGross - totalUploadCosts;
 
         const series = [];

@@ -146,7 +146,28 @@
             }
         }
 
+        async function fetchGroupCurrency() {
+            try {
+                var endpoint = '/v1/groups/' + tracker.groupId + '/currency';
+                var data = await deps.callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
+                if (data && typeof data.robux === 'number') {
+                    tracker.state.groupBalance = data.robux;
+                    tracker.state.actualPendingRobux = data.pendingRobux || 0;
+                    console.log('Sales Tracker: Updated group currency:', data);
+                }
+            } catch (error) {
+                console.warn('Sales Tracker: Failed to fetch group currency:', error);
+            }
+        }
+
         async function prunePast7DaysCounters() {
+            // Only prune if it's been more than 15 minutes since last prune to save API calls
+            var now = Date.now();
+            if (tracker.state.lastPruneTime && (now - tracker.state.lastPruneTime < 15 * 60 * 1000)) {
+                console.log('Sales Tracker: Skipping 7-day prune (too recent)');
+                return;
+            }
+
             console.log('Sales Tracker: Pruning past7Days counters...');
             var sevenDaysAgo = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
 
@@ -154,6 +175,7 @@
             var cursor = '';
             var pageCount = 0;
             var maxPages = 50;
+            var hitOlderThan7Days = false;
 
             try {
                 while (pageCount < maxPages) {
@@ -175,10 +197,14 @@
                         if (txnDate >= sevenDaysAgo) {
                             tempPast7Days.count += 1;
                             tempPast7Days.robux += txn.currency.amount;
+                        } else {
+                            // If we hit a transaction older than 7 days, we can stop fetching pages.
+                            hitOlderThan7Days = true;
+                            break;
                         }
                     }
 
-                    if (!data.nextPageCursor) {
+                    if (hitOlderThan7Days || !data.nextPageCursor) {
                         break;
                     }
 
@@ -194,6 +220,7 @@
             }
 
             tracker.state.past7Days = tempPast7Days;
+            tracker.state.lastPruneTime = Date.now();
             console.log('Past7Days recalculated: ' + tempPast7Days.count + ' sales, R$ ' + tempPast7Days.robux.toLocaleString());
         }
 
@@ -205,7 +232,8 @@
             resetState: resetState,
             saveState: saveState,
             saveTransactionsForAnalytics: saveTransactionsForAnalytics,
-            prunePast7DaysCounters: prunePast7DaysCounters
+            prunePast7DaysCounters: prunePast7DaysCounters,
+            fetchGroupCurrency: fetchGroupCurrency
         };
     };
 })();
