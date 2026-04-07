@@ -88,32 +88,43 @@
         }
 
         function initializeSettings(onUpdated) {
-            if (!(typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local)) {
-                return;
-            }
-
-            chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode', 'timeZone'], function (result) {
-                var previousTimeZone = tracker.settingsCache && tracker.settingsCache.timeZone
-                    ? tracker.settingsCache.timeZone
-                    : 'UTC';
-                var nextTimeZone = normalizeTimeZone(result.timeZone);
-
-                tracker.settingsCache = {
-                    showConversion: result.showConversion !== false,
-                    currency: result.currency || 'USD',
-                    showNotifications: result.showNotifications === true,
-                    darkMode: result.darkMode === true,
-                    timeZone: nextTimeZone
-                };
-
-                if (previousTimeZone !== nextTimeZone) {
-                    tracker.state.lastResetDate = '';
-                    tracker.state.lastResetTimeZone = nextTimeZone;
+            return new Promise(function (resolve) {
+                if (!(typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local)) {
+                    if (typeof onUpdated === 'function') {
+                        onUpdated();
+                    }
+                    resolve();
+                    return;
                 }
 
-                if (typeof onUpdated === 'function') {
-                    onUpdated();
-                }
+                chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode', 'timeZone'], function (result) {
+                    var nextTimeZone = normalizeTimeZone(result.timeZone);
+                    var previousResetTimeZone =
+                        tracker.state && typeof tracker.state.lastResetTimeZone === 'string'
+                            ? tracker.state.lastResetTimeZone
+                            : nextTimeZone;
+
+                    tracker.settingsCache = {
+                        showConversion: result.showConversion !== false,
+                        currency: result.currency || 'USD',
+                        showNotifications: result.showNotifications === true,
+                        darkMode: result.darkMode === true,
+                        timeZone: nextTimeZone
+                    };
+
+                    // Reset "today" only when the persisted tracking timezone actually changed.
+                    if (previousResetTimeZone !== nextTimeZone) {
+                        tracker.state.lastResetDate = '';
+                        tracker.state.lastResetTimeZone = nextTimeZone;
+                    } else if (!tracker.state.lastResetTimeZone) {
+                        tracker.state.lastResetTimeZone = nextTimeZone;
+                    }
+
+                    if (typeof onUpdated === 'function') {
+                        onUpdated();
+                    }
+                    resolve();
+                });
             });
         }
 

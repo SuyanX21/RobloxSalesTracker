@@ -72,7 +72,15 @@
         };
 
         storage.loadState();
-        storage.initializeSettings(updateDashboard);
+        var startScanLoop = function startScanLoop() {
+            scanTransactions();
+            setInterval(scanTransactions, 60000);
+        };
+
+        storage.initializeSettings(updateDashboard).then(startScanLoop).catch(function (error) {
+            console.warn('Sales Tracker: Failed to initialize settings before first scan. Starting with defaults.', error);
+            startScanLoop();
+        });
         storage.installSettingsListener(updateDashboard);
 
         console.log('Sales Tracker initialized for group:', groupId);
@@ -85,8 +93,6 @@
             updateDashboard();
         }
 
-        scanTransactions();
-        setInterval(scanTransactions, 60000);
     }
 
     if (document.readyState === 'loading') {
