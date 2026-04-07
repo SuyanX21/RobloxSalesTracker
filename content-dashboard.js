@@ -207,9 +207,9 @@
                 var dateObj = new Date(state.oldestSaleDate);
                 var dateOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
                 try {
-                    alltimeStart.textContent = dateObj.toLocaleDateString(undefined, Object.assign({}, dateOptions, { timeZone: settings.timeZone }));
+                    alltimeStart.textContent = dateObj.toLocaleString(undefined, Object.assign({}, dateOptions, { timeZone: settings.timeZone }));
                 } catch (e) {
-                    alltimeStart.textContent = dateObj.toLocaleDateString(undefined, dateOptions);
+                    alltimeStart.textContent = dateObj.toLocaleString(undefined, dateOptions);
                 }
             } else {
                 alltimeStart.textContent = 'Scanning history...';

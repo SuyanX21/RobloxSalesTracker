@@ -16,11 +16,21 @@
         timeZone: 'UTC'
     };
 
+    function normalizeTimeZone(timeZone) {
+        var candidate = typeof timeZone === 'string' && timeZone ? timeZone : 'UTC';
+        try {
+            new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
+            return candidate;
+        } catch (e) {
+            return 'UTC';
+        }
+    }
+
     function loadSettings() {
         return new Promise((resolve) => {
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 chrome.storage.local.get(['timeZone'], function(result) {
-                    settings.timeZone = result.timeZone || 'UTC';
+                    settings.timeZone = normalizeTimeZone(result.timeZone);
                     resolve();
                 });
             } else {
@@ -693,7 +703,7 @@
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
-        a.download = 'salestrack_asset_matrix_' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.download = 'salestrack_asset_matrix_' + getISODateInTimezone(new Date(), settings.timeZone) + '.csv';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -779,9 +789,27 @@
         // Listen for real-time updates from content script
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
             chrome.storage.onChanged.addListener(function(changes, areaName) {
-                if (areaName === 'local' && changes.salestrack_cache) {
+                if (areaName !== 'local') {
+                    return;
+                }
+
+                if (changes.timeZone) {
+                    settings.timeZone = normalizeTimeZone(changes.timeZone.newValue);
+                    if (state.analytics) {
+                        render();
+                    }
+                }
+
+                if (changes.salestrack_cache) {
                     console.log('Analytics: Received real-time cache update');
                     var newCache = changes.salestrack_cache.newValue;
+                    if (typeof newCache === 'string') {
+                        try {
+                            newCache = JSON.parse(newCache);
+                        } catch (e) {
+                            newCache = [];
+                        }
+                    }
                     if (newCache) {
                         state.transactions = normalizeTransactions(newCache);
                         render();

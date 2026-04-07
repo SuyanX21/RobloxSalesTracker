@@ -12,6 +12,7 @@
             !ST.createScanTransactions ||
             !ST.callRobloxApiJson ||
             !ST.isSameDayInTimezone ||
+            !ST.getDateKeyInTimezone ||
             !ST.robuxToCurrency
         ) {
             console.error('Sales Tracker: Missing required modules.');
@@ -50,7 +51,8 @@
             resetState: storage.resetState,
             prunePast7DaysCounters: storage.prunePast7DaysCounters,
             fetchGroupCurrency: storage.fetchGroupCurrency,
-            isSameDayInTimezone: ST.isSameDayInTimezone
+            isSameDayInTimezone: ST.isSameDayInTimezone,
+            getDateKeyInTimezone: ST.getDateKeyInTimezone
         });
 
         var createDashboard = function createDashboard() {

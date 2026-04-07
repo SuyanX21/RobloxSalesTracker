@@ -1,22 +1,35 @@
 (function initSalesTrackerScannerModule() {
     var ST = window.SalesTracker = window.SalesTracker || {};
+    var DAY_MS = 24 * 60 * 60 * 1000;
 
     ST.createScanTransactions = function createScanTransactions(tracker, deps) {
         return async function scanTransactions(requestedFullScan) {
             var state = tracker.state;
-            var today = new Date().toDateString();
-
-            if (state.lastResetDate !== today) {
-                state.today = { count: 0, robux: 0 };
-                state.lastResetDate = today;
-                deps.saveState();
-            }
 
             if (state.isScanning) {
                 return;
             }
 
-            var settings = deps.loadSettings();
+            if (!(state.processedIds instanceof Set)) {
+                state.processedIds = new Set(Array.isArray(state.processedIds) ? state.processedIds : []);
+            }
+
+            var settings = deps.loadSettings() || {};
+            var activeTimeZone = settings.timeZone || 'UTC';
+            var getDateKey = typeof deps.getDateKeyInTimezone === 'function'
+                ? deps.getDateKeyInTimezone
+                : function fallbackDateKey(date) {
+                    return new Date(date).toISOString().slice(0, 10);
+                };
+            var todayKey = getDateKey(new Date(), activeTimeZone);
+
+            if (state.lastResetDate !== todayKey || state.lastResetTimeZone !== activeTimeZone) {
+                state.today = { count: 0, robux: 0 };
+                state.lastResetDate = todayKey;
+                state.lastResetTimeZone = activeTimeZone;
+                deps.saveState();
+            }
+
             var newlyProcessedIds = [];
 
             // Explicit button requests should override current scan type.
@@ -29,6 +42,8 @@
                 deps.resetState('full');
                 state = tracker.state;
                 isFullScan = true;
+                state.lastResetDate = todayKey;
+                state.lastResetTimeZone = activeTimeZone;
                 deps.saveState();
             } else if (requestedNewScan || !isFullScan) {
                 // For regular/new scans, ensure we start from the newest page.
@@ -46,10 +61,15 @@
 
             try {
                 var hasNextPage = true;
-                var sevenDaysAgo = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
-                var scanStartMostRecentTimestamp = state.mostRecentTransactionTimestamp;
+                var sevenDaysAgoTimestamp = Date.now() - (7 * DAY_MS);
+                var scanStartMostRecentTimestamp = (typeof state.mostRecentTransactionTimestamp === 'number' && isFinite(state.mostRecentTransactionTimestamp))
+                    ? state.mostRecentTransactionTimestamp
+                    : null;
                 var maxTransactionTimestampSeen = scanStartMostRecentTimestamp;
                 var oldestDate = state.oldestSaleDate ? new Date(state.oldestSaleDate) : null;
+                if (oldestDate && isNaN(oldestDate.getTime())) {
+                    oldestDate = null;
+                }
 
                 while (hasNextPage) {
                     try {
@@ -81,13 +101,32 @@
                         }
 
                         var processedCountInThisPage = 0;
+                        var todayCountInThisPage = 0;
                         var shouldStopScan = false;
                         var hitsOnThisPage = 0;
-                        var now = new Date();
+                        var nowTimestamp = Date.now();
 
                         for (var i = 0; i < data.data.length; i++) {
                             var transaction = data.data[i];
                             if (!transaction.currency || typeof transaction.currency.amount !== 'number') {
+                                continue;
+                            }
+
+                            var amount = transaction.currency.amount;
+                            if (amount < 0) {
+                                continue;
+                            }
+
+                            var transactionDate = new Date(transaction.created);
+                            var transactionTimestamp = transactionDate.getTime();
+                            if (!isFinite(transactionTimestamp)) {
+                                continue;
+                            }
+
+                            // In scan-new mode, stop at known older history based on previous scan watermark.
+                            if (!isFullScan && scanStartMostRecentTimestamp !== null && transactionTimestamp < scanStartMostRecentTimestamp) {
+                                shouldStopScan = true;
+                                hitsOnThisPage++;
                                 continue;
                             }
 
@@ -113,14 +152,6 @@
                                 continue;
                             }
 
-                            var amount = transaction.currency.amount;
-                            if (amount <= 0 && isFullScan) {
-                                continue;
-                            }
-
-                            var transactionDate = new Date(transaction.created);
-                            var transactionTimestamp = transactionDate.getTime();
-
                             if (maxTransactionTimestampSeen === null || transactionTimestamp > maxTransactionTimestampSeen) {
                                 maxTransactionTimestampSeen = transactionTimestamp;
                             }
@@ -132,19 +163,20 @@
                             state.allTime.count++;
                             state.allTime.robux += amount;
 
-                            if (transactionDate >= sevenDaysAgo) {
+                            if (transactionTimestamp >= sevenDaysAgoTimestamp) {
                                 state.past7Days.count++;
                                 state.past7Days.robux += amount;
                             }
 
-                            if (deps.isSameDayInTimezone(transactionDate, settings.timeZone)) {
+                            var transactionDayKey = getDateKey(transactionDate, activeTimeZone);
+                            if (transactionDayKey && transactionDayKey === todayKey) {
                                 state.today.count++;
                                 state.today.robux += amount;
+                                todayCountInThisPage++;
                             }
 
-                            var releaseDate = new Date(transactionDate);
-                            releaseDate.setDate(releaseDate.getDate() + 30);
-                            var timeUntilRelease = releaseDate - now;
+                            var releaseTimestamp = transactionTimestamp + (30 * DAY_MS);
+                            var timeUntilRelease = releaseTimestamp - nowTimestamp;
                             var hoursUntilRelease = timeUntilRelease / (1000 * 60 * 60);
 
                             if (timeUntilRelease > 0) {
@@ -178,7 +210,7 @@
                         }
 
                         if (shouldStopScan) {
-                            console.log('Sales Tracker: Hit ' + hitsOnThisPage + ' already-processed IDs on this page. Stopping scan after finishing this page.');
+                            console.log('Sales Tracker: Hit ' + hitsOnThisPage + ' known/older transactions on this page. Stopping scan after finishing this page.');
                             hasNextPage = false;
                             state.lastCursor = '';
                         } else if (data.nextPageCursor) {
@@ -191,13 +223,24 @@
                             hasNextPage = false;
                         }
 
-                        console.log('Sales Tracker: Processed ' + processedCountInThisPage + ' NEW transactions on this page');
+                        console.log(
+                            'Sales Tracker: Processed '
+                            + processedCountInThisPage
+                            + ' new-to-tracker transactions on this page (today: '
+                            + todayCountInThisPage
+                            + ').'
+                        );
 
                         if (oldestDate) {
                             state.oldestSaleDate = oldestDate.toISOString();
                         }
                         if (maxTransactionTimestampSeen !== null) {
                             state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
+                        }
+
+                        // Flush page results so analytics/other views can see updates immediately.
+                        if (processedCountInThisPage > 0) {
+                            deps.saveTransactionsForAnalytics();
                         }
 
                         deps.updateDashboard();
@@ -216,6 +259,7 @@
                     }
                 }
 
+                // Final flush for any buffered rows.
                 deps.saveTransactionsForAnalytics();
 
                 // Ensure it only switches back to "new" when full scan is actually done.
@@ -226,14 +270,21 @@
             } finally {
                 // Update the master list of processed IDs, keeping newest first.
                 if (newlyProcessedIds.length > 0) {
-                    var combinedIds = newlyProcessedIds.concat(Array.from(state.processedIds || new Set()));
+                    var existingProcessedIds = [];
+                    if (state.processedIds instanceof Set) {
+                        existingProcessedIds = Array.from(state.processedIds);
+                    } else if (Array.isArray(state.processedIds)) {
+                        existingProcessedIds = state.processedIds;
+                    }
+
+                    var combinedIds = newlyProcessedIds.concat(existingProcessedIds);
                     state.processedIds = new Set(combinedIds.slice(0, 10000));
                 }
 
                 state.isScanning = false;
 
-                // Only run heavy 7-day pruning when necessary to avoid rate limiting.
-                if (newlyProcessedIds.length > 0 || (isFullScan && !state.lastCursor)) {
+                // Avoid extra API pressure during/after full scans.
+                if (!isFullScan && newlyProcessedIds.length > 0) {
                     await deps.prunePast7DaysCounters();
                 }
 

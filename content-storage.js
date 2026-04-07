@@ -2,6 +2,87 @@
     var ST = window.SalesTracker = window.SalesTracker || {};
 
     ST.createStorageController = function createStorageController(tracker, deps) {
+        function normalizeTimeZone(timeZone) {
+            var candidate = (typeof timeZone === 'string' && timeZone) ? timeZone : 'UTC';
+            try {
+                new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
+                return candidate;
+            } catch (e) {
+                return 'UTC';
+            }
+        }
+
+        function toFiniteNumber(value, fallback) {
+            var num = Number(value);
+            return isFinite(num) ? num : fallback;
+        }
+
+        function normalizeCounter(counter) {
+            if (!counter || typeof counter !== 'object') {
+                return { count: 0, robux: 0 };
+            }
+            return {
+                count: Math.max(0, Math.floor(toFiniteNumber(counter.count, 0))),
+                robux: toFiniteNumber(counter.robux, 0)
+            };
+        }
+
+        function normalizeProcessedIds(value) {
+            var input = [];
+
+            if (value instanceof Set) {
+                input = Array.from(value);
+            } else if (Array.isArray(value)) {
+                input = value;
+            }
+
+            var clean = [];
+            for (var i = 0; i < input.length; i++) {
+                if (input[i] === null || typeof input[i] === 'undefined') {
+                    continue;
+                }
+                clean.push(String(input[i]));
+            }
+
+            return new Set(clean.slice(0, 10000));
+        }
+
+        function normalizeLoadedState(parsed) {
+            var scanType = parsed && parsed.scanType === 'full' ? 'full' : 'new';
+            var base = ST.createInitialState(scanType);
+
+            if (!parsed || typeof parsed !== 'object') {
+                return base;
+            }
+
+            base.today = normalizeCounter(parsed.today);
+            base.past7Days = normalizeCounter(parsed.past7Days);
+            base.allTime = normalizeCounter(parsed.allTime);
+            base.pending24h = normalizeCounter(parsed.pending24h);
+            base.pending72h = normalizeCounter(parsed.pending72h);
+            base.totalPending = normalizeCounter(parsed.totalPending);
+
+            base.groupBalance = toFiniteNumber(parsed.groupBalance, 0);
+            base.actualPendingRobux = toFiniteNumber(parsed.actualPendingRobux, 0);
+            base.lastCursor = typeof parsed.lastCursor === 'string' ? parsed.lastCursor : '';
+            base.lastResetDate = typeof parsed.lastResetDate === 'string' ? parsed.lastResetDate : base.lastResetDate;
+            base.lastResetTimeZone = typeof parsed.lastResetTimeZone === 'string' ? parsed.lastResetTimeZone : base.lastResetTimeZone;
+            base.lastPruneTime = Math.max(0, toFiniteNumber(parsed.lastPruneTime, 0));
+            base.scanType = parsed.scanType === 'full' ? 'full' : 'new';
+            base.processedIds = normalizeProcessedIds(parsed.processedIds);
+
+            var rawMostRecentTs = parsed.mostRecentTransactionTimestamp;
+            var mostRecentTs = (rawMostRecentTs === null || rawMostRecentTs === '')
+                ? null
+                : toFiniteNumber(rawMostRecentTs, null);
+            base.mostRecentTransactionTimestamp = (mostRecentTs !== null && mostRecentTs >= 0) ? mostRecentTs : null;
+
+            var oldestDate = parsed.oldestSaleDate ? new Date(parsed.oldestSaleDate) : null;
+            base.oldestSaleDate = (oldestDate && !isNaN(oldestDate.getTime())) ? oldestDate.toISOString() : null;
+
+            return base;
+        }
+
         function loadSettings() {
             return tracker.settingsCache;
         }
@@ -12,13 +93,23 @@
             }
 
             chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode', 'timeZone'], function (result) {
+                var previousTimeZone = tracker.settingsCache && tracker.settingsCache.timeZone
+                    ? tracker.settingsCache.timeZone
+                    : 'UTC';
+                var nextTimeZone = normalizeTimeZone(result.timeZone);
+
                 tracker.settingsCache = {
                     showConversion: result.showConversion !== false,
                     currency: result.currency || 'USD',
                     showNotifications: result.showNotifications === true,
                     darkMode: result.darkMode === true,
-                    timeZone: result.timeZone || 'UTC'
+                    timeZone: nextTimeZone
                 };
+
+                if (previousTimeZone !== nextTimeZone) {
+                    tracker.state.lastResetDate = '';
+                    tracker.state.lastResetTimeZone = nextTimeZone;
+                }
 
                 if (typeof onUpdated === 'function') {
                     onUpdated();
@@ -39,30 +130,34 @@
         }
 
         function loadState() {
-            var saved = localStorage.getItem('sales_tracker_' + tracker.groupId);
+            var saved = null;
+
+            try {
+                saved = localStorage.getItem('sales_tracker_' + tracker.groupId);
+            } catch (error) {
+                console.warn('Sales Tracker: Failed to read saved state from localStorage.', error);
+                return;
+            }
+
             if (!saved) {
                 return;
             }
 
             try {
                 var parsed = JSON.parse(saved);
-                var today = new Date().toDateString();
+                tracker.state = normalizeLoadedState(parsed);
+                tracker.state.isScanning = false;
 
-                if (parsed.lastResetDate !== today) {
-                    parsed.today = { count: 0, robux: 0 };
-                    parsed.lastResetDate = today;
-                }
-
-                parsed.isScanning = false;
-                tracker.state = Object.assign({}, tracker.state, parsed);
-                tracker.state.processedIds = new Set(tracker.state.processedIds || []);
-
-                // Recalculate persisted 7-day totals after reload.
-                prunePast7DaysCounters().catch(function (error) {
-                    console.error(error);
-                });
+                // Recalculate persisted 7-day totals after reload, but defer one tick so
+                // any immediate scan can set isScanning first and avoid overlapping API work.
+                setTimeout(function () {
+                    prunePast7DaysCounters().catch(function (error) {
+                        console.error(error);
+                    });
+                }, 0);
             } catch (error) {
                 console.warn('Sales Tracker: Failed to parse saved state, resetting.', error);
+                tracker.state = ST.createInitialState('new');
             }
         }
 
@@ -75,12 +170,20 @@
                 processedIds: Array.from(tracker.state.processedIds || new Set())
             });
 
-            localStorage.setItem('sales_tracker_' + tracker.groupId, JSON.stringify(stateToSave));
+            try {
+                localStorage.setItem('sales_tracker_' + tracker.groupId, JSON.stringify(stateToSave));
+            } catch (error) {
+                console.warn('Sales Tracker: Failed to write local state cache.', error);
+            }
 
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 var payload = {};
                 payload['sales_tracker_' + tracker.groupId] = stateToSave;
-                chrome.storage.local.set(payload);
+                try {
+                    chrome.storage.local.set(payload);
+                } catch (error) {
+                    console.warn('Sales Tracker: Failed to mirror state to chrome.storage.', error);
+                }
             }
         }
 
@@ -161,6 +264,16 @@
         }
 
         async function prunePast7DaysCounters() {
+            if (tracker.state.isScanning) {
+                console.log('Sales Tracker: Skipping 7-day prune during active scan.');
+                return;
+            }
+
+            if (tracker.state.isPruningPast7Days) {
+                console.log('Sales Tracker: Skipping 7-day prune (already running).');
+                return;
+            }
+
             // Only prune if it's been more than 15 minutes since last prune to save API calls
             var now = Date.now();
             if (tracker.state.lastPruneTime && (now - tracker.state.lastPruneTime < 15 * 60 * 1000)) {
@@ -168,60 +281,110 @@
                 return;
             }
 
-            console.log('Sales Tracker: Pruning past7Days counters...');
-            var sevenDaysAgo = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
-
-            var tempPast7Days = { count: 0, robux: 0 };
-            var cursor = '';
-            var pageCount = 0;
-            var maxPages = 50;
-            var hitOlderThan7Days = false;
-
+            tracker.state.isPruningPast7Days = true;
             try {
-                while (pageCount < maxPages) {
-                    var endpointCursor = cursor ? '&cursor=' + cursor : '';
-                    var endpoint = '/v2/groups/' + tracker.groupId + '/transactions?limit=100&transactionType=Sale' + endpointCursor;
-                    var data = await deps.callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
+                console.log('Sales Tracker: Pruning past7Days counters...');
+                var sevenDaysAgoTimestamp = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
-                    if (!(data && data.data && data.data.length)) {
-                        break;
-                    }
+                var tempPast7Days = { count: 0, robux: 0 };
+                var cursor = '';
+                var pageCount = 0;
+                var maxPages = 50;
+                var hitOlderThan7Days = false;
+                var consecutiveRateLimitHits = 0;
+                var maxRateLimitHits = 5;
 
-                    for (var i = 0; i < data.data.length; i++) {
-                        var txn = data.data[i];
-                        if (!txn.currency || typeof txn.currency.amount !== 'number') {
+                try {
+                    while (pageCount < maxPages) {
+                        var endpointCursor = cursor ? '&cursor=' + cursor : '';
+                        var endpoint = '/v2/groups/' + tracker.groupId + '/transactions?limit=100&transactionType=Sale' + endpointCursor;
+                        var data = null;
+
+                        try {
+                            data = await deps.callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
+                            consecutiveRateLimitHits = 0;
+                        } catch (error) {
+                            if (error && error.status === 429) {
+                                consecutiveRateLimitHits += 1;
+                                if (consecutiveRateLimitHits >= maxRateLimitHits) {
+                                    console.log('Sales Tracker: Stopping 7-day prune after repeated rate limits.');
+                                    return;
+                                }
+
+                                var waitMs = Math.min(3000 * consecutiveRateLimitHits, 12000);
+                                console.log('Sales Tracker: Prune rate limited, waiting ' + (waitMs / 1000) + ' seconds...');
+                                await new Promise(function (resolve) {
+                                    setTimeout(resolve, waitMs);
+                                });
+                                continue;
+                            }
+                            throw error;
+                        }
+
+                        if (!data || !Array.isArray(data.data)) {
+                            break;
+                        }
+
+                        if (data.data.length === 0) {
+                            if (!data.nextPageCursor) {
+                                break;
+                            }
+                            cursor = data.nextPageCursor;
+                            pageCount += 1;
+                            await new Promise(function (resolve) {
+                                setTimeout(resolve, 300);
+                            });
                             continue;
                         }
 
-                        var txnDate = new Date(txn.created);
-                        if (txnDate >= sevenDaysAgo) {
-                            tempPast7Days.count += 1;
-                            tempPast7Days.robux += txn.currency.amount;
-                        } else {
-                            // If we hit a transaction older than 7 days, we can stop fetching pages.
-                            hitOlderThan7Days = true;
+                        for (var i = 0; i < data.data.length; i++) {
+                            var txn = data.data[i];
+                            if (!txn.currency || typeof txn.currency.amount !== 'number') {
+                                continue;
+                            }
+
+                            var amount = txn.currency.amount;
+                            if (amount < 0) {
+                                continue;
+                            }
+
+                            var txnDate = new Date(txn.created);
+                            var txnTimestamp = txnDate.getTime();
+                            if (!isFinite(txnTimestamp)) {
+                                continue;
+                            }
+
+                            if (txnTimestamp >= sevenDaysAgoTimestamp) {
+                                tempPast7Days.count += 1;
+                                tempPast7Days.robux += amount;
+                            } else {
+                                // If we hit a transaction older than 7 days, we can stop fetching pages.
+                                hitOlderThan7Days = true;
+                                break;
+                            }
+                        }
+
+                        if (hitOlderThan7Days || !data.nextPageCursor) {
                             break;
                         }
-                    }
 
-                    if (hitOlderThan7Days || !data.nextPageCursor) {
-                        break;
+                        cursor = data.nextPageCursor;
+                        pageCount += 1;
+                        await new Promise(function (resolve) {
+                            setTimeout(resolve, 300);
+                        });
                     }
-
-                    cursor = data.nextPageCursor;
-                    pageCount += 1;
-                    await new Promise(function (resolve) {
-                        setTimeout(resolve, 300);
-                    });
+                } catch (error) {
+                    console.warn('Prune past7Days failed:', error);
+                    return;
                 }
-            } catch (error) {
-                console.warn('Prune past7Days failed:', error);
-                return;
-            }
 
-            tracker.state.past7Days = tempPast7Days;
-            tracker.state.lastPruneTime = Date.now();
-            console.log('Past7Days recalculated: ' + tempPast7Days.count + ' sales, R$ ' + tempPast7Days.robux.toLocaleString());
+                tracker.state.past7Days = tempPast7Days;
+                tracker.state.lastPruneTime = Date.now();
+                console.log('Past7Days recalculated: ' + tempPast7Days.count + ' sales, R$ ' + tempPast7Days.robux.toLocaleString());
+            } finally {
+                tracker.state.isPruningPast7Days = false;
+            }
         }
 
         return {
