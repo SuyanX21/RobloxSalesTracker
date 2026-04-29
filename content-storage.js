@@ -203,6 +203,11 @@
                 return;
             }
 
+            // Backward compatible + group support
+            var groupId = tracker.groupId;
+            var groupName = tracker.groupName || 'Unknown Group';
+            var cacheKey = groupId ? 'salestrack_cache_' + groupId : 'salestrack_cache';
+
             function doSave(existingData) {
                 var existingTx = [];
                 if (existingData) {
@@ -216,14 +221,21 @@
                     }
                 }
 
-                var merged = tracker.collectedTransactions.slice();
-                var existingIds = new Set(tracker.collectedTransactions.map(function (tx) {
+                var taggedTxs = tracker.collectedTransactions.map(function(tx) {
+                    return Object.assign({}, tx, {
+                        groupId: groupId,
+                        groupName: groupName
+                    });
+                });
+
+                var merged = taggedTxs.slice();
+                var existingIds = new Set(taggedTxs.map(function (tx) {
                     return tx.id;
                 }));
 
                 for (var i = 0; i < existingTx.length; i++) {
                     var tx = existingTx[i];
-                    if (!existingIds.has(tx.id)) {
+                    if (tx.groupId !== groupId || !existingIds.has(tx.id)) {
                         merged.push(tx);
                     }
                 }
@@ -235,13 +247,15 @@
                 var trimmed = merged.slice(0, 10000);
 
                 if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                    chrome.storage.local.set({ salestrack_cache: trimmed }, function () {
-                        console.log('Sales Tracker: Saved', trimmed.length, 'transactions to salestrack_cache for analytics');
+                    var payload = {};
+                    payload[cacheKey] = trimmed;
+                    chrome.storage.local.set(payload, function () {
+                        console.log('Sales Tracker: Saved', trimmed.length, 'transactions to', cacheKey, 'for analytics');
                     });
                 } else {
                     try {
-                        localStorage.setItem('salestrack_cache', JSON.stringify(trimmed));
-                        console.log('Sales Tracker: Saved', trimmed.length, 'transactions to salestrack_cache for analytics');
+                        localStorage.setItem(cacheKey, JSON.stringify(trimmed));
+                        console.log('Sales Tracker: Saved', trimmed.length, 'transactions to', cacheKey, 'for analytics');
                     } catch (error) {
                         console.warn('Sales Tracker: Failed to save transactions for analytics:', error);
                     }
@@ -251,11 +265,11 @@
             }
 
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.get(['salestrack_cache'], function (result) {
-                    doSave(result.salestrack_cache ? JSON.stringify(result.salestrack_cache) : null);
+                chrome.storage.local.get([cacheKey], function (result) {
+                    doSave(result[cacheKey] ? JSON.stringify(result[cacheKey]) : null);
                 });
             } else {
-                var existing = localStorage.getItem('salestrack_cache');
+                var existing = localStorage.getItem(cacheKey);
                 doSave(existing);
             }
         }
@@ -392,7 +406,7 @@
 
                 tracker.state.past7Days = tempPast7Days;
                 tracker.state.lastPruneTime = Date.now();
-                console.log('Past7Days recalculated: ' + tempPast7Days.count + ' sales, R$ ' + tempPast7Days.robux.toLocaleString());
+                console.log('Past7Days recalculated:', tempPast7Days.count + ' sales, R$ ' + tempPast7Days.robux.toLocaleString());
             } finally {
                 tracker.state.isPruningPast7Days = false;
             }
@@ -411,3 +425,4 @@
         };
     };
 })();
+

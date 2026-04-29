@@ -137,12 +137,19 @@
             });
         }
 
+
         var analyticsBtn = dashboard.querySelector('#open-analytics-btn');
         if (analyticsBtn) {
             analyticsBtn.addEventListener('click', function () {
-                window.open(chrome.runtime.getURL('analytics.html'), '_blank');
+                // Fix: chrome.runtime.getURL undefined on content scripts
+                if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
+                    window.open(chrome.runtime.getURL('analytics.html'), '_blank');
+                } else {
+                    window.open('analytics.html', '_blank');
+                }
             });
         }
+
 
         var donateBtn = dashboard.querySelector('#donate-tracker-btn');
         if (donateBtn) {

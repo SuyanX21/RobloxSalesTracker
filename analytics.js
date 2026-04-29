@@ -284,18 +284,15 @@
             if (velocityPct > 20) trend = 'Hot';
             if (velocityPct < -20) trend = 'Declining';
 
-            // DYNAMIC UPLOAD FEE LOGIC
             let uploadCost = 0;
             if (row.type === 'GamePass' || row.type === 'DeveloperProduct') {
-                uploadCost = 0; // Passes and DevProducts are free to upload
+                uploadCost = 0;
             } else {
-                // If it's an Asset, we check the average price to guess if it's a Shirt or UGC
-                // Shirts/Pants usually sell for ~5 Robux. UGC is forced by Roblox to be at least 15+
                 const averagePrice = row.unitsSold > 0 ? (row.grossRobux / row.unitsSold) : 0;
                 if (averagePrice < 15) {
-                    uploadCost = 10; // It's likely classic clothing
+                    uploadCost = 10;
                 } else {
-                    uploadCost = 1750; // It's likely UGC
+                    uploadCost = 1750;
                 }
             }
 
@@ -307,8 +304,8 @@
                 assetId: row.assetId,
                 unitsSold: row.unitsSold,
                 grossRobux: row.grossRobux,
-                uploadCost: uploadCost, // Save this so we can total it up below
-                netRobux: row.grossRobux - uploadCost, // Dynamic net deduction
+                uploadCost: uploadCost, 
+                netRobux: row.grossRobux - uploadCost, 
                 velocityPct,
                 marketSharePct,
                 trend,
@@ -316,7 +313,6 @@
             };
         });
 
-        // Rank the assets properly FIRST
         const ranked = [...assetMatrix].sort((a, b) => b.grossRobux - a.grossRobux);
         const topCount = Math.max(1, Math.ceil(ranked.length * 0.2));
         let cumulativeGross = 0;
@@ -327,13 +323,11 @@
             ranked[i].isWhale = i < topCount || cumulativeShare <= 80;
         }
 
-        // Now calculate whale stats from the initialized 'ranked' array
         const whaleRevenue = ranked
             .filter((item) => item.isWhale)
             .reduce((sum, item) => sum + item.grossRobux, 0);
         const whaleSharePct = totalGross > 0 ? (whaleRevenue / totalGross) * 100 : 0;
 
-        // Calculate total net using the aggregated upload costs
         const totalNet = totalGross - totalUploadCosts;
 
         const series = [];
@@ -354,8 +348,8 @@
         return {
             transactionCount: normalized.length,
             totalGross,
-            totalNet, // Updated logic
-            totalUploadCosts, // Replaces totalTax
+            totalNet, 
+            totalUploadCosts, 
             whaleRevenue,
             whaleSharePct,
             hourlyCounts,
@@ -412,7 +406,7 @@
             {
                 label: 'Total Upload Costs',
                 value: 'R$ ' + formatRobux(analytics.totalUploadCosts),
-                meta: 'R$ 1,750 per unique asset',
+                meta: 'Dynamic fees based on asset type', // Fix: Reflected dynamic logic accuracy here
             },
         ];
 
@@ -567,7 +561,6 @@
             if (row.velocityPct > 20) velocityClass = 'trend-hot';
             if (row.velocityPct < -20) velocityClass = 'trend-down';
 
-            // Custom class for styling net profits vs net losses visually
             var netClass = row.netRobux < 0 ? 'net-loss' : 'net-profit';
 
             return '<tr>' +
@@ -722,11 +715,21 @@
 
         try {
             var parsed = JSON.parse(text);
-            if (!Array.isArray(parsed)) {
-                throw new Error('Top-level JSON must be an array of transactions.');
+            var toMerge = [];
+            
+            // Fix: Flexible JSON unwrapping matching API standard formats
+            if (Array.isArray(parsed)) {
+                toMerge = parsed;
+            } else if (parsed && Array.isArray(parsed.transactions)) {
+                toMerge = parsed.transactions;
+            } else if (parsed && Array.isArray(parsed.data)) {
+                toMerge = parsed.data;
+            } else {
+                throw new Error('JSON must be an array or contain a "data" or "transactions" array.');
             }
+
             var before = state.transactions.length;
-            state.transactions = mergeTransactions(state.transactions, parsed);
+            state.transactions = mergeTransactions(state.transactions, toMerge);
             saveCachedTransactions(state.transactions);
             var added = Math.max(0, state.transactions.length - before);
             status.textContent = 'Loaded successfully. ' + added.toLocaleString() + ' new rows merged.';
@@ -773,7 +776,6 @@
     async function boot() {
         await loadSettings();
         
-        // Initial load
         readCachedTransactions().then(function(fromCache) {
             var fromWindow = [];
             if (Array.isArray(window.salestrackTransactions)) {
@@ -786,7 +788,6 @@
             render();
         });
 
-        // Listen for real-time updates from content script
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
             chrome.storage.onChanged.addListener(function(changes, areaName) {
                 if (areaName !== 'local') {
@@ -811,7 +812,18 @@
                         }
                     }
                     if (newCache) {
-                        state.transactions = normalizeTransactions(newCache);
+                        // Fix: Added safety unwrapping so we don't crash normalizeTransactions()
+                        var toNormalize = newCache;
+                        if (!Array.isArray(toNormalize)) {
+                            if (toNormalize && Array.isArray(toNormalize.transactions)) {
+                                toNormalize = toNormalize.transactions;
+                            } else if (toNormalize && Array.isArray(toNormalize.data)) {
+                                toNormalize = toNormalize.data;
+                            } else {
+                                toNormalize = [];
+                            }
+                        }
+                        state.transactions = normalizeTransactions(toNormalize);
                         render();
                     }
                 }

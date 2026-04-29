@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Roblox Sales Tracker",
-  "version": "4.6",
-  "description": "Standalone Roblox sales intelligence dashboard and real-time sales tracker.",
+  "version": "4.7",
+  "description": "Standalone Roblox sales intelligence dashboard and real-time sales tracker with per-group analytics.",
   "permissions": ["storage"],
   "icons": {
     "16": "images/icon16.png",
@@ -24,14 +24,7 @@
     {
       "matches": ["https://www.roblox.com/communities/configure*"],
       "css": ["styles.css"],
-      "js": [
-        "content-api.js",
-        "content-utils.js",
-        "content-storage.js",
-        "content-dashboard.js",
-        "content-scanner.js",
-        "content.js"
-      ]
+      "js": ["content-api.js", "content-utils.js", "content-storage.js", "content-dashboard.js", "content-scanner.js", "content.js"]
     }
   ],
   "web_accessible_resources": [
@@ -43,7 +36,11 @@
         "settings.js",
         "analytics.html",
         "analytics.css",
-        "analytics.js",
+        "analytics-state.js",
+        "analytics-utils.js",
+        "analytics-core.js",
+        "analytics-ui.js",
+        "analytics-main.js",
         "background.js",
         "images/*"
       ],

@@ -240,7 +240,7 @@
 
                         // Flush page results so analytics/other views can see updates immediately.
                         if (processedCountInThisPage > 0) {
-                            deps.saveTransactionsForAnalytics();
+                            deps.saveTransactionsForAnalytics(tracker.groupId, tracker.groupName);
                         }
 
                         deps.updateDashboard();
@@ -260,7 +260,7 @@
                 }
 
                 // Final flush for any buffered rows.
-                deps.saveTransactionsForAnalytics();
+                deps.saveTransactionsForAnalytics(tracker.groupId, tracker.groupName);
 
                 // Ensure it only switches back to "new" when full scan is actually done.
                 if (state.scanType === 'full' && !state.lastCursor) {
