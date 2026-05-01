@@ -3,6 +3,14 @@
     var DAY_MS = 24 * 60 * 60 * 1000;
 
     ST.createScanTransactions = function createScanTransactions(tracker, deps) {
+        function getTransactionsEndpoint(cursorValue) {
+            var cursor = cursorValue ? '&cursor=' + cursorValue : '';
+            if (tracker.scopeType === 'user') {
+                return '/v2/users/' + tracker.entityId + '/transactions?limit=100&transactionType=Sale' + cursor;
+            }
+            return '/v2/groups/' + tracker.entityId + '/transactions?limit=100&transactionType=Sale' + cursor;
+        }
+
         return async function scanTransactions(requestedFullScan) {
             var state = tracker.state;
 
@@ -73,8 +81,7 @@
 
                 while (hasNextPage) {
                     try {
-                        var cursor = state.lastCursor ? '&cursor=' + state.lastCursor : '';
-                        var endpoint = '/v2/groups/' + tracker.groupId + '/transactions?limit=100&transactionType=Sale' + cursor;
+                        var endpoint = getTransactionsEndpoint(state.lastCursor);
 
                         console.log('Sales Tracker: Fetching (' + state.scanType + '):', endpoint);
                         var data = await deps.callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
@@ -240,7 +247,7 @@
 
                         // Flush page results so analytics/other views can see updates immediately.
                         if (processedCountInThisPage > 0) {
-                            deps.saveTransactionsForAnalytics(tracker.groupId, tracker.groupName);
+                            deps.saveTransactionsForAnalytics();
                         }
 
                         deps.updateDashboard();
@@ -260,7 +267,7 @@
                 }
 
                 // Final flush for any buffered rows.
-                deps.saveTransactionsForAnalytics(tracker.groupId, tracker.groupName);
+                deps.saveTransactionsForAnalytics();
 
                 // Ensure it only switches back to "new" when full scan is actually done.
                 if (state.scanType === 'full' && !state.lastCursor) {

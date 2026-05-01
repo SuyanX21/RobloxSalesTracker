@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Roblox Sales Tracker",
-  "version": "4.7",
+  "version": "4.8",
   "description": "Standalone Roblox sales intelligence dashboard and real-time sales tracker with per-group analytics.",
   "permissions": ["storage"],
   "icons": {
@@ -18,11 +18,17 @@
   },
   "host_permissions": [
     "https://www.roblox.com/*",
-    "https://economy.roblox.com/*"
+    "https://economy.roblox.com/*",
+    "https://users.roblox.com/*"
   ],
   "content_scripts": [
     {
       "matches": ["https://www.roblox.com/communities/configure*"],
+      "css": ["styles.css"],
+      "js": ["content-api.js", "content-utils.js", "content-storage.js", "content-dashboard.js", "content-scanner.js", "content.js"]
+    },
+    {
+      "matches": ["https://www.roblox.com/transactions*"],
       "css": ["styles.css"],
       "js": ["content-api.js", "content-utils.js", "content-storage.js", "content-dashboard.js", "content-scanner.js", "content.js"]
     }

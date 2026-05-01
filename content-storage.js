@@ -2,6 +2,25 @@
     var ST = window.SalesTracker = window.SalesTracker || {};
 
     ST.createStorageController = function createStorageController(tracker, deps) {
+        var trackerScopeType = tracker.scopeType === 'user' ? 'user' : 'group';
+        var trackerEntityId = String(tracker.entityId || tracker.groupId || tracker.userId || '');
+
+        function getStateCacheKey() {
+            return 'sales_tracker_' + trackerScopeType + '_' + trackerEntityId;
+        }
+
+        function getAnalyticsCacheKey() {
+            return trackerEntityId ? ('salestrack_cache_' + trackerScopeType + '_' + trackerEntityId) : 'salestrack_cache';
+        }
+
+        function getTransactionsEndpoint(cursorValue) {
+            var cursor = cursorValue ? '&cursor=' + cursorValue : '';
+            if (trackerScopeType === 'user') {
+                return '/v2/users/' + trackerEntityId + '/transactions?limit=100&transactionType=Sale' + cursor;
+            }
+            return '/v2/groups/' + trackerEntityId + '/transactions?limit=100&transactionType=Sale' + cursor;
+        }
+
         function normalizeTimeZone(timeZone) {
             var candidate = (typeof timeZone === 'string' && timeZone) ? timeZone : 'UTC';
             try {
@@ -144,7 +163,7 @@
             var saved = null;
 
             try {
-                saved = localStorage.getItem('sales_tracker_' + tracker.groupId);
+                saved = localStorage.getItem(getStateCacheKey());
             } catch (error) {
                 console.warn('Sales Tracker: Failed to read saved state from localStorage.', error);
                 return;
@@ -182,14 +201,14 @@
             });
 
             try {
-                localStorage.setItem('sales_tracker_' + tracker.groupId, JSON.stringify(stateToSave));
+                localStorage.setItem(getStateCacheKey(), JSON.stringify(stateToSave));
             } catch (error) {
                 console.warn('Sales Tracker: Failed to write local state cache.', error);
             }
 
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 var payload = {};
-                payload['sales_tracker_' + tracker.groupId] = stateToSave;
+                payload[getStateCacheKey()] = stateToSave;
                 try {
                     chrome.storage.local.set(payload);
                 } catch (error) {
@@ -203,10 +222,9 @@
                 return;
             }
 
-            // Backward compatible + group support
-            var groupId = tracker.groupId;
-            var groupName = tracker.groupName || 'Unknown Group';
-            var cacheKey = groupId ? 'salestrack_cache_' + groupId : 'salestrack_cache';
+            var groupId = trackerScopeType === 'group' ? trackerEntityId : ('user-' + trackerEntityId);
+            var groupName = trackerScopeType === 'group' ? (tracker.groupName || 'Unknown Group') : (tracker.displayName || 'User Sales');
+            var cacheKey = getAnalyticsCacheKey();
 
             function doSave(existingData) {
                 var existingTx = [];
@@ -276,15 +294,17 @@
 
         async function fetchGroupCurrency() {
             try {
-                var endpoint = '/v1/groups/' + tracker.groupId + '/currency';
+                var endpoint = trackerScopeType === 'user'
+                    ? '/v1/user/currency'
+                    : '/v1/groups/' + trackerEntityId + '/currency';
                 var data = await deps.callRobloxApiJson({ subdomain: 'economy', endpoint: endpoint });
                 if (data && typeof data.robux === 'number') {
                     tracker.state.groupBalance = data.robux;
                     tracker.state.actualPendingRobux = data.pendingRobux || 0;
-                    console.log('Sales Tracker: Updated group currency:', data);
+                    console.log('Sales Tracker: Updated ' + trackerScopeType + ' currency:', data);
                 }
             } catch (error) {
-                console.warn('Sales Tracker: Failed to fetch group currency:', error);
+                console.warn('Sales Tracker: Failed to fetch ' + trackerScopeType + ' currency:', error);
             }
         }
 
@@ -321,8 +341,7 @@
 
                 try {
                     while (pageCount < maxPages) {
-                        var endpointCursor = cursor ? '&cursor=' + cursor : '';
-                        var endpoint = '/v2/groups/' + tracker.groupId + '/transactions?limit=100&transactionType=Sale' + endpointCursor;
+                        var endpoint = getTransactionsEndpoint(cursor);
                         var data = null;
 
                         try {
@@ -425,4 +444,3 @@
         };
     };
 })();
-

@@ -1,13 +1,137 @@
 (function initSalesTrackerUtilsModule() {
     var ST = window.SalesTracker = window.SalesTracker || {};
 
-    ST.getGroupIdFromUrl = function getGroupIdFromUrl() {
+ST.getGroupIdFromUrl = function getGroupIdFromUrl() {
         var match = window.location.href.match(/[?&]id=(\d+)/);
         if (!match) {
             match = window.location.href.match(/groups\/(\d+)/);
         }
-        console.log('Sales Tracker: Group ID from URL:', match ? match[1] : null);
+        if (!match) {
+            match = window.location.href.match(/[?&]groupId=(\d+)/);
+        }
+        if (match && match[1]) {
+            console.log('Sales Tracker: Group ID from URL:', match[1]);
+        }
         return match ? match[1] : null;
+    };
+
+ST.getPageContext = function getPageContext() {
+        var path = window.location.pathname;
+        if (path === '/transactions' || path.indexOf('/transactions') === 0) {
+            return 'transactions';
+        }
+        if (path.indexOf('/communities/') !== -1 || path.indexOf('/groups/') !== -1) {
+            return 'groups';
+        }
+        return 'unknown';
+    };
+
+    ST.getUserIdFromPage = function getUserIdFromPage() {
+        var match = window.location.href.match(/[?&]userId=(\d+)/);
+        if (match) {
+            return match[1];
+        }
+        var profileLink = document.querySelector('a[href*="/users/"], [data-user-id]');
+        if (profileLink) {
+            var href = profileLink.href || profileLink.getAttribute('href');
+            var userMatch = href && href.match(/\/users\/(\d+)/);
+            if (userMatch) {
+                return userMatch[1];
+            }
+            var dataUserId = profileLink.getAttribute('data-user-id');
+            if (dataUserId) {
+                return dataUserId;
+            }
+        }
+        var userIdElement = document.querySelector('[data-user-id], [data-userid]');
+        if (userIdElement) {
+            return userIdElement.getAttribute('data-user-id') || userIdElement.getAttribute('data-userid');
+        }
+        return null;
+    };
+
+    ST.getTransactionPageUserId = function getTransactionPageUserId() {
+        var userId = ST.getUserIdFromPage();
+        if (userId) {
+            return userId;
+        }
+
+        if (typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function') {
+            try {
+                var resources = performance.getEntriesByType('resource');
+                for (var i = resources.length - 1; i >= 0; i--) {
+                    var resource = resources[i];
+                    var resourceName = resource && resource.name ? resource.name : '';
+                    var userTransactionsMatch = resourceName.match(/\/v2\/users\/(\d+)\/transactions/i);
+                    if (userTransactionsMatch && userTransactionsMatch[1]) {
+                        return userTransactionsMatch[1];
+                    }
+                }
+            } catch (e) {
+                // Ignore performance API access issues and continue returning null.
+            }
+        }
+
+        return null;
+    };
+
+    ST.getTransactionPageGroupFilter = function getTransactionPageGroupFilter() {
+        var groupSelect = document.querySelector('select[name="groupId"], select[id*="group"], select[class*="group"]');
+        if (groupSelect && groupSelect.value) {
+            return groupSelect.value;
+        }
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var paramGroupId = params.get('groupId') || params.get('groupid') || params.get('groupID');
+            if (paramGroupId && /^\d+$/.test(paramGroupId)) {
+                return paramGroupId;
+            }
+        } catch (e) {
+            // Ignore URL parsing failures and continue fallback checks.
+        }
+        var match = window.location.href.match(/[?&]groupId=(\d+)/i);
+        if (match && match[1]) {
+            return match[1];
+        }
+
+        var groupDataElement = document.querySelector('[data-group-id], [data-groupid], [data-group-id-value]');
+        if (groupDataElement) {
+            var dataGroupId =
+                groupDataElement.getAttribute('data-group-id')
+                || groupDataElement.getAttribute('data-groupid')
+                || groupDataElement.getAttribute('data-group-id-value');
+            if (dataGroupId && /^\d+$/.test(dataGroupId)) {
+                return dataGroupId;
+            }
+        }
+
+        var groupLink = document.querySelector('a[href*="/groups/"]');
+        if (groupLink && groupLink.href) {
+            var groupLinkMatch = groupLink.href.match(/\/groups\/(\d+)/);
+            if (groupLinkMatch && groupLinkMatch[1]) {
+                return groupLinkMatch[1];
+            }
+        }
+
+        // Roblox's newer transactions UI is React-based and may not expose a native <select>.
+        // If a group transactions request was made already, recover the group id from resource URLs.
+        if (typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function') {
+            try {
+                var resources = performance.getEntriesByType('resource');
+                for (var i = resources.length - 1; i >= 0; i--) {
+                    var resource = resources[i];
+                    var resourceName = resource && resource.name ? resource.name : '';
+                    var resourceMatch = resourceName.match(/\/v2\/groups\/(\d+)\/transactions/i);
+                    if (resourceMatch && resourceMatch[1]) {
+                        return resourceMatch[1];
+                    }
+                }
+            } catch (e2) {
+                // Ignore performance API access issues and continue returning null.
+            }
+        }
+
+        return null;
     };
 
     ST.getDateKeyInTimezone = function getDateKeyInTimezone(date, timezone) {

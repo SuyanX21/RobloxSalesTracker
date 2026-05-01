@@ -45,6 +45,7 @@
 
         var settings = deps.loadSettings();
         var todayStr = new Date().toLocaleDateString('de-DE', { timeZone: settings.timeZone });
+        var balanceLabel = tracker.scopeType === 'user' ? 'Account Balance' : 'Group Balance';
 
         var html = '\n'
             + '            <a href="#" id="tracker-help-btn" title="What is this?" style="position: absolute; top: 12px; right: 12px; text-decoration: none; color: #aaa; font-size: 20px; background: #252729; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer; transition: background 0.2s;">\n'
@@ -55,7 +56,7 @@
             + '            </a>\n'
             + '            <div style="font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #ffffff;">Roblox Sales Tracker</div> \n'
             + '            <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px; border-left: 4px solid #00b06f;">\n'
-            + '                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Group Balance</div>\n'
+            + '                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">' + balanceLabel + '</div>\n'
             + '                <div style="font-size: 22px; color: #ffffff; font-weight: bold; margin-top: 4px;"><b id="group-balance-robux">R$ 0</b></div>\n'
             + '                <div id="group-balance-conversion" style="font-size:12px; color:#aaa; margin-top:2px;"></div>\n'
             + '            </div>\n'
