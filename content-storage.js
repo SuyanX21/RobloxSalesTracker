@@ -4,6 +4,9 @@
     ST.createStorageController = function createStorageController(tracker, deps) {
         var trackerScopeType = tracker.scopeType === 'user' ? 'user' : 'group';
         var trackerEntityId = String(tracker.entityId || tracker.groupId || tracker.userId || '');
+        var analyticsFlushInProgress = false;
+        var analyticsFlushQueued = false;
+        var analyticsAutoSaveIntervalId = null;
 
         function getStateCacheKey() {
             return 'sales_tracker_' + trackerScopeType + '_' + trackerEntityId;
@@ -222,24 +225,63 @@
                 return;
             }
 
+            if (analyticsFlushInProgress) {
+                analyticsFlushQueued = true;
+                return;
+            }
+
             var groupId = trackerScopeType === 'group' ? trackerEntityId : ('user-' + trackerEntityId);
             var groupName = trackerScopeType === 'group' ? (tracker.groupName || 'Unknown Group') : (tracker.displayName || 'User Sales');
             var cacheKey = getAnalyticsCacheKey();
+            var transactionsToPersist = tracker.collectedTransactions.slice();
+            tracker.collectedTransactions = [];
+            analyticsFlushInProgress = true;
 
-            function doSave(existingData) {
-                var existingTx = [];
-                if (existingData) {
-                    try {
-                        existingTx = JSON.parse(existingData);
-                        if (!Array.isArray(existingTx)) {
-                            existingTx = [];
-                        }
-                    } catch (e) {
-                        existingTx = [];
-                    }
+            function finalizeFlush() {
+                analyticsFlushInProgress = false;
+                if (analyticsFlushQueued) {
+                    analyticsFlushQueued = false;
+                    saveTransactionsForAnalytics();
+                }
+            }
+
+            function requeueFailedTransactions() {
+                if (transactionsToPersist.length === 0) {
+                    return;
+                }
+                tracker.collectedTransactions = transactionsToPersist.concat(tracker.collectedTransactions);
+            }
+
+            function parseExistingTransactions(existingData) {
+                if (Array.isArray(existingData)) {
+                    return existingData;
                 }
 
-                var taggedTxs = tracker.collectedTransactions.map(function(tx) {
+                if (!existingData) {
+                    return [];
+                }
+
+                if (typeof existingData !== 'string') {
+                    return [];
+                }
+
+                try {
+                    var parsed = JSON.parse(existingData);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            function handleSaveFailure(error) {
+                console.warn('Sales Tracker: Failed to save transactions for analytics:', error);
+                requeueFailedTransactions();
+                finalizeFlush();
+            }
+
+            function doSave(existingData) {
+                var existingTx = parseExistingTransactions(existingData);
+                var taggedTxs = transactionsToPersist.map(function(tx) {
                     return Object.assign({}, tx, {
                         groupId: groupId,
                         groupName: groupName
@@ -268,28 +310,55 @@
                     var payload = {};
                     payload[cacheKey] = trimmed;
                     chrome.storage.local.set(payload, function () {
+                        if (chrome.runtime && chrome.runtime.lastError) {
+                            handleSaveFailure(chrome.runtime.lastError);
+                            return;
+                        }
                         console.log('Sales Tracker: Saved', trimmed.length, 'transactions to', cacheKey, 'for analytics');
+                        finalizeFlush();
                     });
                 } else {
                     try {
                         localStorage.setItem(cacheKey, JSON.stringify(trimmed));
                         console.log('Sales Tracker: Saved', trimmed.length, 'transactions to', cacheKey, 'for analytics');
+                        finalizeFlush();
                     } catch (error) {
-                        console.warn('Sales Tracker: Failed to save transactions for analytics:', error);
+                        handleSaveFailure(error);
                     }
                 }
-
-                tracker.collectedTransactions = [];
             }
 
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 chrome.storage.local.get([cacheKey], function (result) {
-                    doSave(result[cacheKey] ? JSON.stringify(result[cacheKey]) : null);
+                    if (chrome.runtime && chrome.runtime.lastError) {
+                        handleSaveFailure(chrome.runtime.lastError);
+                        return;
+                    }
+                    doSave(result[cacheKey] || null);
                 });
             } else {
-                var existing = localStorage.getItem(cacheKey);
-                doSave(existing);
+                try {
+                    var existing = localStorage.getItem(cacheKey);
+                    doSave(existing);
+                } catch (error) {
+                    handleSaveFailure(error);
+                }
             }
+        }
+
+        function startAnalyticsAutoSave(intervalMs) {
+            var parsedInterval = Number(intervalMs);
+            var resolvedInterval = isFinite(parsedInterval) && parsedInterval > 0
+                ? parsedInterval
+                : (10 * 60 * 1000);
+
+            if (analyticsAutoSaveIntervalId) {
+                clearInterval(analyticsAutoSaveIntervalId);
+            }
+
+            analyticsAutoSaveIntervalId = setInterval(function () {
+                saveTransactionsForAnalytics();
+            }, resolvedInterval);
         }
 
         async function fetchGroupCurrency() {
@@ -439,6 +508,7 @@
             resetState: resetState,
             saveState: saveState,
             saveTransactionsForAnalytics: saveTransactionsForAnalytics,
+            startAnalyticsAutoSave: startAnalyticsAutoSave,
             prunePast7DaysCounters: prunePast7DaysCounters,
             fetchGroupCurrency: fetchGroupCurrency
         };

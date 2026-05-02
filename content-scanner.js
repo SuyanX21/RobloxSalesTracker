@@ -211,6 +211,8 @@
                                     type: transaction.details && transaction.details.type ? transaction.details.type : 'Unknown'
                                 }
                             });
+                            // Persist each new sale immediately so analytics stays live.
+                            deps.saveTransactionsForAnalytics();
 
                             newlyProcessedIds.push(txId);
                             processedCountInThisPage++;
@@ -243,11 +245,6 @@
                         }
                         if (maxTransactionTimestampSeen !== null) {
                             state.mostRecentTransactionTimestamp = maxTransactionTimestampSeen;
-                        }
-
-                        // Flush page results so analytics/other views can see updates immediately.
-                        if (processedCountInThisPage > 0) {
-                            deps.saveTransactionsForAnalytics();
                         }
 
                         deps.updateDashboard();

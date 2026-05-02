@@ -150,9 +150,16 @@
     function processAnalyticsByGroup(transactionsByGroup, timezone = 'UTC') {
         const analyticsByGroup = {};
         for (var groupId in transactionsByGroup) {
-            const analytics = processAnalytics(transactionsByGroup[groupId], timezone);
+            const transactions = Array.isArray(transactionsByGroup[groupId]) ? transactionsByGroup[groupId] : [];
+            const analytics = processAnalytics(transactions, timezone);
+            const parsedScope = window.AnalyticsUtils.parseScopeKey(groupId);
+            const firstTransaction = transactions[0] || {};
+            const rawGroupName = typeof firstTransaction.groupName === 'string' ? firstTransaction.groupName : '';
             analytics.groupId = groupId;
-            analytics.groupName = transactionsByGroup[groupId][0]?.groupName || 'Unknown Group';
+            analytics.scopeType = parsedScope.scopeType;
+            analytics.scopeEntityId = parsedScope.entityId;
+            analytics.groupName = rawGroupName;
+            analytics.groupLabel = window.AnalyticsUtils.formatScopeLabel(groupId, rawGroupName);
             analyticsByGroup[groupId] = analytics;
         }
         return analyticsByGroup;

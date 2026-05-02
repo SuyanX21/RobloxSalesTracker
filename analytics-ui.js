@@ -33,18 +33,52 @@
         const select = selector.querySelector('#groupSelect');
         const toggle = selector.querySelector('#aggregateToggle');
 
-        select.innerHTML = '<option value="">Aggregate All</option>' + groups.map(g => `<option value="${g}" ${state.currentGroupId === g ? 'selected' : ''}>${state.analyticsByGroup[g]?.groupName || g}</option>`).join('');
+        select.innerHTML = '';
 
-        select.addEventListener('change', function() {
-            window.AnalyticsState.setCurrentGroupId(this.value || null);
-            window.AnalyticsMain.render();
+        var aggregateOption = document.createElement('option');
+        aggregateOption.value = '';
+        aggregateOption.textContent = 'Aggregate All';
+        select.appendChild(aggregateOption);
+
+        groups.forEach(function(groupKey) {
+            var option = document.createElement('option');
+            option.value = groupKey;
+            var analytics = state.analyticsByGroup[groupKey] || {};
+            option.textContent = analytics.groupLabel || window.AnalyticsUtils.formatScopeLabel(groupKey, analytics.groupName || '');
+            select.appendChild(option);
         });
+
+        if (state.showAggregate) {
+            select.value = '';
+        } else if (state.currentGroupId) {
+            select.value = state.currentGroupId;
+        }
 
         toggle.checked = state.showAggregate;
-        toggle.addEventListener('change', function() {
-            window.AnalyticsState.toggleAggregate();
-            window.AnalyticsMain.render();
-        });
+
+        if (select.getAttribute('data-bound') !== '1') {
+            select.addEventListener('change', function() {
+                var currentState = window.AnalyticsState.getState();
+                var selectedScope = this.value || null;
+                currentState.currentGroupId = selectedScope;
+                currentState.showAggregate = !selectedScope;
+                window.AnalyticsMain.render();
+            });
+            select.setAttribute('data-bound', '1');
+        }
+
+        if (toggle.getAttribute('data-bound') !== '1') {
+            toggle.addEventListener('change', function() {
+                var currentState = window.AnalyticsState.getState();
+                currentState.showAggregate = Boolean(this.checked);
+                if (!currentState.showAggregate && !currentState.currentGroupId) {
+                    var availableGroups = Object.keys(currentState.analyticsByGroup || {});
+                    currentState.currentGroupId = availableGroups.length > 0 ? availableGroups[0] : null;
+                }
+                window.AnalyticsMain.render();
+            });
+            toggle.setAttribute('data-bound', '1');
+        }
     }
 
     function renderStats() {

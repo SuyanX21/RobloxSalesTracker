@@ -13,7 +13,8 @@
         buildTransactionKey,
         mergeTransactions,
         calculateVelocityPct,
-        // To be added: extractGroupId
+        parseScopeKey,
+        formatScopeLabel,
     };
 
     function normalizeTimeZone(timeZone) {
@@ -82,13 +83,16 @@
         const assetId = details.id == null ? '' : String(details.id);
         const assetName = String(details.name || 'Unknown Asset');
         const assetType = String(details.type || 'Unknown');
+        const groupId = raw.groupId == null ? '' : String(raw.groupId);
+        const groupName = raw.groupName == null ? '' : String(raw.groupName);
 
         return {
             id: raw.id == null ? '' : String(raw.id),
             created: createdDate.toISOString(),
             currency: { amount },
             details: { id: assetId, name: assetName, type: assetType },
-            // To be added: groupId, groupName
+            groupId: groupId,
+            groupName: groupName,
         };
     }
 
@@ -134,6 +138,54 @@
         if (sumB === 0 && sumA === 0) return 0;
         if (sumB === 0 && sumA > 0) return 100;
         return ((sumA - sumB) / sumB) * 100;
+    }
+
+    function parseScopeKey(scopeKey) {
+        var raw = String(scopeKey || '');
+        var scopedMatch = raw.match(/^(group|user)_(\d+)$/i);
+        if (scopedMatch) {
+            return {
+                raw: raw,
+                scopeType: scopedMatch[1].toLowerCase(),
+                entityId: scopedMatch[2],
+            };
+        }
+
+        var numericMatch = raw.match(/^(\d+)$/);
+        if (numericMatch) {
+            return {
+                raw: raw,
+                scopeType: 'group',
+                entityId: numericMatch[1],
+            };
+        }
+
+        return {
+            raw: raw,
+            scopeType: 'group',
+            entityId: raw,
+        };
+    }
+
+    function formatScopeLabel(scopeKey, preferredName) {
+        var parsed = parseScopeKey(scopeKey);
+        var cleanName = typeof preferredName === 'string' ? preferredName.trim() : '';
+        var hasName = cleanName && cleanName.toLowerCase() !== 'unknown group';
+        var entityId = parsed.entityId || parsed.raw || 'unknown';
+
+        if (parsed.scopeType === 'user') {
+            var userName = hasName ? cleanName : 'User Sales';
+            return userName + ' (User ID: ' + entityId + ')';
+        }
+
+        if (hasName) {
+            if (cleanName === entityId) {
+                return 'Group ID: ' + entityId;
+            }
+            return cleanName + ' (Group ID: ' + entityId + ')';
+        }
+
+        return 'Group ID: ' + entityId;
     }
 
 })();

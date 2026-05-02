@@ -79,16 +79,62 @@
             currentState.currentGroupId = null;
             currentState.showAggregate = true;
 
+            function extractScopeIdFromCacheKey(key) {
+                if (typeof key !== 'string') {
+                    return null;
+                }
+                var match = key.match(/^salestrack_cache_(group_\d+|user_\d+|\d+)$/i);
+                return match ? match[1] : null;
+            }
+
+            function canonicalizeScopeId(scopeId) {
+                var raw = String(scopeId || '').trim();
+                if (!raw) {
+                    return '';
+                }
+
+                if (/^\d+$/.test(raw)) {
+                    // Legacy key format: salestrack_cache_<groupId>
+                    return 'group_' + raw;
+                }
+
+                if (window.AnalyticsUtils && typeof window.AnalyticsUtils.parseScopeKey === 'function') {
+                    var parsed = window.AnalyticsUtils.parseScopeKey(raw);
+                    if (parsed && parsed.scopeType && parsed.entityId) {
+                        return parsed.scopeType + '_' + parsed.entityId;
+                    }
+                }
+
+                return raw;
+            }
+
+            function mergeGroupTransactions(scopeId, payload) {
+                var canonicalScopeId = canonicalizeScopeId(scopeId);
+                if (!canonicalScopeId) {
+                    return;
+                }
+
+                var normalized = window.AnalyticsUtils.normalizeTransactions(payload);
+                var existing = currentState.transactionsByGroup[canonicalScopeId];
+
+                if (!Array.isArray(existing) || existing.length === 0) {
+                    currentState.transactionsByGroup[canonicalScopeId] = normalized;
+                    return;
+                }
+
+                currentState.transactionsByGroup[canonicalScopeId] = window.AnalyticsUtils.mergeTransactions(existing, normalized);
+            }
+
             function loadAllGroupCaches(result) {
                 for (var key in result) {
-                    if (key.match(/^salestrack_cache_\w+$/)) {
+                    var scopeId = extractScopeIdFromCacheKey(key);
+                    if (scopeId) {
                         try {
                             var raw = result[key];
                             if (!raw) continue;
                             var parsed = raw;
                             if (typeof raw === 'string') parsed = JSON.parse(raw);
-                            var groupId = key.replace('salestrack_cache_', '');
-                            currentState.transactionsByGroup[groupId] = window.AnalyticsUtils.normalizeTransactions(parsed);
+                            mergeGroupTransactions(scopeId, parsed);
                         } catch (e) {
                             console.warn('Failed to parse', key, ':', e);
                         }
@@ -99,13 +145,13 @@
             function loadAllGroupCachesFromLocalStorage() {
                 for (var i = 0; i < localStorage.length; i++) {
                     var key = localStorage.key(i);
-                    if (key.match(/^salestrack_cache_\w+$/)) {
+                    var scopeId = extractScopeIdFromCacheKey(key);
+                    if (scopeId) {
                         try {
                             var raw = localStorage.getItem(key);
                             if (!raw) continue;
                             var parsed = JSON.parse(raw);
-                            var groupId = key.replace('salestrack_cache_', '');
-                            currentState.transactionsByGroup[groupId] = window.AnalyticsUtils.normalizeTransactions(parsed);
+                            mergeGroupTransactions(scopeId, parsed);
                         } catch (e) {
                             console.warn('Failed to parse', key, ':', e);
                         }

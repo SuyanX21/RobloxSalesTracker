@@ -61,17 +61,18 @@
         
         const transactionsByGroup = state.transactionsByGroup || {};
         const analyticsByGroup = window.AnalyticsCore.processAnalyticsByGroup(transactionsByGroup, settings.timeZone);
+        const availableGroupIds = Object.keys(analyticsByGroup);
         
         state.analyticsByGroup = analyticsByGroup;
         
-        if (!state.currentGroupId && Object.keys(transactionsByGroup).length > 0) {
-            state.currentGroupId = Object.keys(transactionsByGroup)[0];
+        if ((!state.currentGroupId || !analyticsByGroup[state.currentGroupId]) && availableGroupIds.length > 0) {
+            state.currentGroupId = availableGroupIds[0];
         }
         
-        if (state.showAggregate || !state.currentGroupId || !analyticsByGroup[state.currentGroupId]) {
-            state.analytics = analyticsByGroup[Object.keys(analyticsByGroup)[0]] || null;
+        if (state.showAggregate || !state.currentGroupId) {
+            state.analytics = analyticsByGroup[availableGroupIds[0]] || null;
         } else {
-            state.analytics = analyticsByGroup[state.currentGroupId];
+            state.analytics = analyticsByGroup[state.currentGroupId] || analyticsByGroup[availableGroupIds[0]] || null;
         }
         
         window.AnalyticsUI.renderStats();

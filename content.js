@@ -273,6 +273,7 @@
 
             storage.loadState();
             var startScanLoop = function startScanLoop() {
+                storage.startAnalyticsAutoSave(10 * 60 * 1000);
                 scanTransactions();
                 setInterval(scanTransactions, 60000);
             };
