@@ -39,6 +39,7 @@
             }
 
             var newlyProcessedIds = [];
+            var newlyDiscoveredSales = [];
 
             // Explicit button requests should override current scan type.
             var requestedNewScan = (requestedFullScan === false || requestedFullScan === 'new');
@@ -214,6 +215,15 @@
                             // Persist each new sale immediately so analytics stays live.
                             deps.saveTransactionsForAnalytics();
 
+                            if (!isFullScan) {
+                                newlyDiscoveredSales.push({
+                                    id: txId,
+                                    name: transaction.details && transaction.details.name ? transaction.details.name : 'Roblox Item',
+                                    amount: amount,
+                                    created: transaction.created
+                                });
+                            }
+
                             newlyProcessedIds.push(txId);
                             processedCountInThisPage++;
                         }
@@ -290,6 +300,75 @@
                 // Avoid extra API pressure during/after full scans.
                 if (!isFullScan && newlyProcessedIds.length > 0) {
                     await deps.prunePast7DaysCounters();
+                }
+
+                // Trigger Chrome notifications for new sales if enabled in settings
+                if (!isFullScan && newlyDiscoveredSales.length > 0) {
+                    try {
+                        var currentSettings = typeof deps.loadSettings === 'function' ? deps.loadSettings() : (tracker.settingsCache || {});
+                        if (currentSettings.showNotifications) {
+                            var notifMode = currentSettings.notificationMode || 'each';
+                            var entityLabel = tracker.displayName || tracker.groupName || (tracker.scopeType === 'user' ? 'User Sales' : 'Group Sales');
+
+                            if (notifMode === 'every10') {
+                                state.unnotifiedSalesCount = (state.unnotifiedSalesCount || 0) + newlyDiscoveredSales.length;
+                                var batchRobux = 0;
+                                for (var b = 0; b < newlyDiscoveredSales.length; b++) {
+                                    batchRobux += newlyDiscoveredSales[b].amount || 0;
+                                }
+                                state.unnotifiedSalesRobux = (state.unnotifiedSalesRobux || 0) + batchRobux;
+
+                                if (state.unnotifiedSalesCount >= 10) {
+                                    var milestoneCount = Math.floor(state.unnotifiedSalesCount / 10) * 10;
+                                    var milestoneRobux = state.unnotifiedSalesRobux;
+                                    state.unnotifiedSalesCount = state.unnotifiedSalesCount % 10;
+                                    state.unnotifiedSalesRobux = 0;
+
+                                    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                                        chrome.runtime.sendMessage({
+                                            type: 'salestrack_SHOW_NOTIFICATION',
+                                            title: '🎯 ' + milestoneCount + ' New Sales! (' + entityLabel + ')',
+                                            message: 'Milestone reached: +' + milestoneCount + ' sales (+R$ ' + milestoneRobux.toLocaleString() + ' earned)'
+                                        }, function() {
+                                            if (chrome.runtime.lastError) {}
+                                        });
+                                    }
+                                }
+                            } else {
+                                // 'each' sale notification
+                                if (newlyDiscoveredSales.length <= 4) {
+                                    for (var s = 0; s < newlyDiscoveredSales.length; s++) {
+                                        var saleItem = newlyDiscoveredSales[s];
+                                        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                                            chrome.runtime.sendMessage({
+                                                type: 'salestrack_SHOW_NOTIFICATION',
+                                                title: '💰 New Sale: ' + saleItem.name,
+                                                message: '+R$ ' + Number(saleItem.amount).toLocaleString() + ' • ' + entityLabel
+                                            }, function() {
+                                                if (chrome.runtime.lastError) {}
+                                            });
+                                        }
+                                    }
+                                } else {
+                                    var totalNewRobux = 0;
+                                    for (var t = 0; t < newlyDiscoveredSales.length; t++) {
+                                        totalNewRobux += newlyDiscoveredSales[t].amount || 0;
+                                    }
+                                    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                                        chrome.runtime.sendMessage({
+                                            type: 'salestrack_SHOW_NOTIFICATION',
+                                            title: '💰 ' + newlyDiscoveredSales.length + ' New Sales! (' + entityLabel + ')',
+                                            message: 'Earned +R$ ' + totalNewRobux.toLocaleString() + ' across ' + newlyDiscoveredSales.length + ' sales'
+                                        }, function() {
+                                            if (chrome.runtime.lastError) {}
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    } catch (notifErr) {
+                        console.warn('Sales Tracker: Notification error:', notifErr);
+                    }
                 }
 
                 deps.updateDashboard();

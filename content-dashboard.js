@@ -4,7 +4,7 @@
     ST.createDashboard = function createDashboard(tracker, deps) {
         var dashboard = document.createElement('div');
         dashboard.id = 'sales-dashboard';
-        
+
         function updateDashboardPosition() {
             var windowHeight = window.innerHeight;
             var windowWidth = window.innerWidth;
@@ -13,7 +13,7 @@
 
             // Ensure width doesn't exceed window width
             var actualWidth = Math.min(dashboardWidth, windowWidth - (margin * 2));
-            
+
             // Calculate best top position
             var topPos = 100;
             if (windowHeight < 600) {
@@ -34,7 +34,7 @@
             dashboard.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
             dashboard.style.boxShadow = '0 4px 15px rgba(0,0,0,0.6)';
             dashboard.style.border = '1px solid #393b3d';
-            
+
             // Custom scrollbar for better look
             dashboard.style.scrollbarWidth = 'thin';
             dashboard.style.scrollbarColor = '#444 #1b1d1f';
@@ -78,8 +78,9 @@
             + '            </div>\n'
             + '            <div style="margin-bottom: 20px; background: #252729; padding: 12px; border-radius: 6px;">\n'
             + '                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Pending Revenue</div>\n'
-            + '                <div style="font-size: 18px; margin-top: 8px; color: #64b5f6; font-weight: bold;">Actual: <b id="actual-pending-robux">R$ 0</b></div>\n'
-            + '                <div id="actual-pending-conversion" style="font-size:12px; color:#aaa; margin-bottom: 12px;"></div>\n'
+            + '                <div style="font-size: 18px; margin-top: 8px; color: #64b5f6; font-weight: bold;">Projected EOD: <b id="projected-eod-robux">R$ 0</b></div>\n'
+            + '                <div id="projected-eod-conversion" style="font-size:12px; color:#aaa;"></div>\n'
+            + '                <div id="projected-eod-accuracy" style="font-size:11px; color:#aaa; margin-top: 4px; margin-bottom: 12px; line-height: 1.35;"></div>\n'
             + '                \n'
             + '                <div style="font-size: 10px; color: #888; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; border-top: 1px solid #333; padding-top: 8px;">Breakdown (30-day Est.)</div>\n'
             + '                <div style="font-size: 14px; color: #ffffff;">Next 24h: <b id="pending24h-robux" style="color: #ff6b6b;">R$ 0</b></div>\n'
@@ -194,11 +195,37 @@
 
         var groupBalanceRobux = dashboard.querySelector('#group-balance-robux');
         var groupBalanceConversion = dashboard.querySelector('#group-balance-conversion');
-        var actualPendingRobux = dashboard.querySelector('#actual-pending-robux');
-        var actualPendingConversion = dashboard.querySelector('#actual-pending-conversion');
+        var projectedEodRobux = dashboard.querySelector('#projected-eod-robux') || dashboard.querySelector('#actual-pending-robux');
+        var projectedEodConversion = dashboard.querySelector('#projected-eod-conversion') || dashboard.querySelector('#actual-pending-conversion');
+        var projectedEodAccuracy = dashboard.querySelector('#projected-eod-accuracy');
 
         var pending24hRobux = dashboard.querySelector('#pending24h-robux');
         var pending72hRobux = dashboard.querySelector('#pending72h-robux');
+
+        var calcProjected = (deps && typeof deps.calculateProjectedEodRevenue === 'function')
+            ? deps.calculateProjectedEodRevenue
+            : ST.calculateProjectedEodRevenue;
+        var projectedRobux = (typeof calcProjected === 'function')
+            ? calcProjected(tracker, settings)
+            : (state.today ? state.today.robux : 0);
+
+        var calcAccuracy = (deps && typeof deps.calculateProjectedEodAccuracy === 'function')
+            ? deps.calculateProjectedEodAccuracy
+            : ST.calculateProjectedEodAccuracy;
+        var accuracyData = (typeof calcAccuracy === 'function')
+            ? calcAccuracy(tracker, settings)
+            : null;
+
+        if (projectedEodAccuracy) {
+            if (accuracyData && accuracyData.text) {
+                projectedEodAccuracy.textContent = accuracyData.text;
+                if (accuracyData.color) {
+                    projectedEodAccuracy.style.color = accuracyData.color;
+                }
+            } else {
+                projectedEodAccuracy.textContent = '';
+            }
+        }
 
         if (todayCount) todayCount.textContent = state.today.count.toLocaleString();
         if (todayRobux) todayRobux.textContent = 'R$ ' + state.today.robux.toLocaleString();
@@ -208,7 +235,7 @@
         if (alltimeRobux) alltimeRobux.textContent = 'R$ ' + state.allTime.robux.toLocaleString();
 
         if (groupBalanceRobux) groupBalanceRobux.textContent = 'R$ ' + (state.groupBalance || 0).toLocaleString();
-        if (actualPendingRobux) actualPendingRobux.textContent = 'R$ ' + (state.actualPendingRobux || 0).toLocaleString();
+        if (projectedEodRobux) projectedEodRobux.textContent = 'R$ ' + (projectedRobux || 0).toLocaleString();
 
         if (alltimeStart) {
             if (state.oldestSaleDate) {
@@ -229,13 +256,13 @@
             if (days7Conversion) days7Conversion.textContent = deps.robuxToCurrency(state.past7Days.robux, settings.currency);
             if (alltimeConversion) alltimeConversion.textContent = deps.robuxToCurrency(state.allTime.robux, settings.currency);
             if (groupBalanceConversion) groupBalanceConversion.textContent = deps.robuxToCurrency(state.groupBalance, settings.currency);
-            if (actualPendingConversion) actualPendingConversion.textContent = deps.robuxToCurrency(state.actualPendingRobux, settings.currency);
+            if (projectedEodConversion) projectedEodConversion.textContent = deps.robuxToCurrency(projectedRobux, settings.currency);
         } else {
             if (todayConversion) todayConversion.textContent = '';
             if (days7Conversion) days7Conversion.textContent = '';
             if (alltimeConversion) alltimeConversion.textContent = '';
             if (groupBalanceConversion) groupBalanceConversion.textContent = '';
-            if (actualPendingConversion) actualPendingConversion.textContent = '';
+            if (projectedEodConversion) projectedEodConversion.textContent = '';
         }
 
         if (pending24hRobux) pending24hRobux.textContent = 'R$ ' + state.pending24h.robux.toLocaleString();

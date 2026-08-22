@@ -92,7 +92,9 @@
             document.body.appendChild(dashboard);
             ST.updateDashboard(placeholderTracker, {
                 loadSettings: placeholderDeps.loadSettings,
-                robuxToCurrency: ST.robuxToCurrency
+                robuxToCurrency: ST.robuxToCurrency,
+                calculateProjectedEodRevenue: ST.calculateProjectedEodRevenue,
+                calculateProjectedEodAccuracy: ST.calculateProjectedEodAccuracy
             });
         }
 
@@ -196,7 +198,9 @@
             !ST.callRobloxApiJson ||
             !ST.isSameDayInTimezone ||
             !ST.getDateKeyInTimezone ||
-            !ST.robuxToCurrency
+            !ST.robuxToCurrency ||
+            !ST.calculateProjectedEodRevenue ||
+            !ST.calculateProjectedEodAccuracy
         ) {
             console.error('Sales Tracker: Missing required modules.');
             return;
@@ -238,7 +242,10 @@
             var updateDashboard = function updateDashboard() {
                 ST.updateDashboard(tracker, {
                     loadSettings: storage.loadSettings,
-                    robuxToCurrency: ST.robuxToCurrency
+                    robuxToCurrency: ST.robuxToCurrency,
+                    calculateProjectedEodRevenue: ST.calculateProjectedEodRevenue,
+                    calculateProjectedEodAccuracy: ST.calculateProjectedEodAccuracy,
+                    getCachedTransactions: storage.getCachedTransactions
                 });
             };
 

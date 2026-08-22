@@ -2,6 +2,14 @@
 
 This browser extension helps you track your Roblox sales and revenue in a simple, easy-to-read popup. It displays your sales for today, the past 7 days, and all time, along with estimated Robux earned.
 
+## Changelog
+
+### Version 6.0
+- Added sales prediction tools to estimate upcoming revenue more accurately.
+- Redesigned the settings menu with a cleaner, easier-to-use layout.
+- Added total stats tracking for a clearer overview of overall performance.
+- Introduced sales notifications so important updates are easier to catch in real time.
+
 ## How It Works
 
 * Automatically fetches your sales data from Roblox (when logged in).

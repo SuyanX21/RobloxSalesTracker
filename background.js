@@ -1,7 +1,7 @@
 // Background script for Roblox Sales Tracker
 // Handles message passing between content script and analytics dashboard
 
-// Listen for messages from analytics.js
+// Listen for messages from content scripts and analytics dashboard
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     if (message.type === 'salestrack_FETCH_LATEST') {
         handleGetCachedTransactions()
@@ -9,7 +9,31 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
             .catch(function(error) { sendResponse({ error: error.message }); });
         return true; // Keep the message channel open for async response
     }
+
+    if (message.type === 'salestrack_SHOW_NOTIFICATION') {
+        showChromeNotification(message.title, message.message);
+        sendResponse({ success: true });
+        return true;
+    }
 });
+
+function showChromeNotification(title, messageText) {
+    if (!chrome.notifications) {
+        return;
+    }
+
+    chrome.notifications.create('', {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('images/icon128.png'),
+        title: title || 'Roblox Sales Tracker',
+        message: messageText || 'New sale detected!',
+        priority: 2
+    }, function(notificationId) {
+        if (chrome.runtime.lastError) {
+            console.warn('Sales Tracker: Notification error:', chrome.runtime.lastError);
+        }
+    });
+}
 
 async function handleGetCachedTransactions() {
     return new Promise(function(resolve) {

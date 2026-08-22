@@ -1,47 +1,336 @@
-﻿<!DOCTYPE html>
-<html lang="en"> //hi
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sales Tracker Settings</title>
+    <title>Sales Tracker - Settings & Device Stats</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        body { background: #181a1b; color: #fff; font-family: sans-serif; margin: 0; padding: 0; }
-        .container { max-width: 500px; margin: 40px auto; background: #232526; border-radius: 8px; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-        h1 { font-size: 1.7em; margin-bottom: 18px; }
-        label { display: block; margin-top: 18px; font-size: 1em; }
-        input[type="checkbox"] { margin-right: 8px; }
-        select { padding: 8px 12px; background: #1b1d1f; color: #fff; border: 1px solid #393b3d; border-radius: 4px; font-size: 1em; }
-        button { margin-top: 28px; padding: 10px 22px; background: #ffb800; border: none; border-radius: 6px; color: #000; font-weight: bold; font-size: 1em; cursor: pointer; }
-        button:hover { background: #ffa500; }
+        * { box-sizing: border-box; }
+        body { background: #141517; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 24px 16px; }
+        .container { max-width: 720px; margin: 0 auto; background: #1e2022; border: 1px solid #2d3033; border-radius: 12px; padding: 28px; box-shadow: 0 8px 32px rgba(0,0,0,0.45); }
+
+        /* Navigation Tabs */
+        .tab-nav { display: flex; gap: 8px; border-bottom: 1px solid #2d3033; padding-bottom: 14px; margin-bottom: 24px; }
+        .tab-btn { background: #26292c; border: 1px solid #363a3e; color: #aaa; padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px; }
+        .tab-btn:hover { background: #32363a; color: #fff; }
+        .tab-btn.active { background: #00b06f; border-color: #00b06f; color: #fff; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Typography */
+        h1 { font-size: 1.6em; margin: 0 0 6px 0; color: #fff; font-weight: 700; }
+        h2 { font-size: 1.25em; margin: 24px 0 12px 0; color: #fff; font-weight: 600; border-bottom: 1px solid #2d3033; padding-bottom: 8px; }
+        .subtitle { color: #8c9298; font-size: 13px; margin: 0 0 20px 0; line-height: 1.4; }
+
+        /* Form Controls */
+        .setting-section { background: #24272a; border: 1px solid #313539; border-radius: 8px; padding: 18px; margin-bottom: 16px; }
+        .setting-section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; color: #ffb800; margin-bottom: 14px; }
+
+        label.checkbox-label { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; user-select: none; margin-bottom: 12px; }
+        label.checkbox-label:last-child { margin-bottom: 0; }
+        input[type="checkbox"] { width: 18px; height: 18px; accent-color: #00b06f; cursor: pointer; }
+
+        .field-group { margin-top: 14px; }
+        .field-group label { display: block; font-size: 13px; color: #c4c9ce; margin-bottom: 6px; font-weight: 500; }
+
+        select { width: 100%; max-width: 380px; padding: 10px 14px; background: #181a1c; color: #fff; border: 1px solid #3a3e42; border-radius: 6px; font-size: 14px; outline: none; }
+        select:focus { border-color: #00b06f; }
+
+        .sub-options { margin-left: 28px; margin-top: 10px; padding: 12px 14px; background: #1b1d1f; border-left: 3px solid #00b06f; border-radius: 0 6px 6px 0; }
+        .radio-option { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; cursor: pointer; font-size: 13px; }
+        .radio-option:last-child { margin-bottom: 0; }
+        .radio-option input[type="radio"] { margin-top: 2px; accent-color: #00b06f; cursor: pointer; }
+        .radio-desc { color: #8c9298; font-size: 11px; margin-top: 2px; }
+
+        .update-log { margin-top: 12px; }
+        .update-log-wrapper { background: #24272a; border: 1px solid #313539; border-radius: 8px; padding: 0; overflow: hidden; }
+        .update-log-wrapper summary {
+            list-style: none; cursor: pointer; user-select: none; padding: 18px 18px 14px 18px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; color: #ffb800; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        }
+        .update-log-wrapper summary::-webkit-details-marker { display: none; }
+        .update-log-wrapper summary::after {
+            content: "▾"; font-size: 16px; color: #ffb800; transition: transform 0.2s ease;
+        }
+        .update-log-wrapper[open] summary::after { transform: rotate(180deg); }
+        .update-log-content { padding: 0 18px 18px 18px; }
+        .update-entry { margin-bottom: 18px; }
+        .update-entry:last-child { margin-bottom: 0; }
+        .update-version { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+        .update-date { font-size: 12px; color: #8c9298; font-weight: 600; margin-left: 8px; }
+        .update-entry ul { margin: 8px 0 0 18px; padding: 0; color: #dfe3e8; font-size: 13px; line-height: 1.6; }
+        .update-entry li { margin-bottom: 4px; }
+
+        .btn-primary { padding: 12px 28px; background: #ffb800; border: none; border-radius: 6px; color: #000; font-weight: bold; font-size: 14px; cursor: pointer; transition: background 0.2s; }
+        .btn-primary:hover { background: #ffa500; }
+        .btn-secondary { padding: 10px 18px; background: #2f3337; border: 1px solid #40454a; border-radius: 6px; color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; transition: background 0.2s; }
+        .btn-secondary:hover { background: #3c4146; }
+        .btn-green { padding: 10px 18px; background: #00b06f; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s; }
+        .btn-green:hover { background: #00c87f; }
+
+        /* Device Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .stat-card { background: #24272a; border: 1px solid #313539; border-radius: 8px; padding: 16px; position: relative; overflow: hidden; }
+        .stat-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8c9298; font-weight: 700; margin-bottom: 6px; }
+        .stat-card-value { font-size: 22px; font-weight: bold; color: #ffffff; }
+        .stat-card-value.green { color: #00b06f; }
+        .stat-card-value.gold { color: #ffb800; }
+        .stat-card-value.blue { color: #64b5f6; }
+        .stat-card-sub { font-size: 12px; color: #8c9298; margin-top: 4px; }
+
+        /* Stats Tables */
+        .stats-table-wrapper { background: #24272a; border: 1px solid #313539; border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+        table.stats-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+        table.stats-table th { background: #1c1e20; color: #8c9298; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #313539; }
+        table.stats-table td { padding: 12px 14px; border-bottom: 1px solid #2a2d31; color: #e1e4e8; }
+        table.stats-table tr:last-child td { border-bottom: none; }
+        table.stats-table tr:hover td { background: #292d31; }
+
+        .badge-scope { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .badge-group { background: rgba(0, 176, 111, 0.15); color: #00b06f; border: 1px solid rgba(0, 176, 111, 0.3); }
+        .badge-user { background: rgba(100, 181, 246, 0.15); color: #64b5f6; border: 1px solid rgba(100, 181, 246, 0.3); }
+
+        .actions-row { display: flex; gap: 10px; align-items: center; margin-top: 20px; }
+        #status { margin-top: 14px; font-weight: 600; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Sales Tracker Settings</h1>
-        <form id="settings-form">
-            <label><input type="checkbox" id="showNotifications"> Show notifications for new sales</label>
-            <label><input type="checkbox" id="darkMode"> Enable dark mode</label>
-            <label><input type="checkbox" id="showConversion"> Show real money conversion</label>
-            <label style="margin-top:10px;">Currency:
-                <select id="currency">
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (EUR)</option>
-                </select>
-            </label>
-            <label style="margin-top:10px;">Time Zone:  
-                <select id="timeZone">
-                    <option value="UTC">UTC</option>
-                    <option value="Europe/Berlin">Central European Time (CET/CEST)</option>
-                    <option value="America/New_York">Eastern Time (EST/EDT)</option>
-                    <option value="America/Los_Angeles">Pacific Time (PST/PDT)</option>
-                    <option value="Asia/Tokyo">Japan Standard Time (JST)</option>
-                    <option value="Australia/Sydney">Australian Eastern Time (AET)</option>
-                </select>
-            </label>
-            <button type="submit">Save Settings</button>
-        </form>
-        <div id="status" style="margin-top:18px; color:#ffb800;"></div>
+        <!-- Navigation Tabs -->
+        <div class="tab-nav">
+            <button type="button" class="tab-btn active" id="tab-btn-settings">⚙️ Settings</button>
+            <button type="button" class="tab-btn" id="tab-btn-stats">📊 Device Stats</button>
+        </div>
+
+        <!-- Tab 1: Settings Form -->
+        <div class="tab-content active" id="tab-content-settings">
+            <h1>Sales Tracker Settings</h1>
+            <p class="subtitle">Customize notifications, currency conversion, time zone, and appearance.</p>
+
+            <details class="update-log-wrapper">
+                <summary>📝 Update Log</summary>
+                <div class="update-log-content">
+                    <div class="update-log">
+                        <div class="update-entry">
+                            <div class="update-version">v6.0 <span class="update-date">Current build</span></div>
+                            <ul>
+                                <li>Added sales prediction tools to estimate upcoming revenue more accurately.</li>
+                                <li>Redesigned the settings menu with a cleaner, easier-to-use layout.</li>
+                                <li>Added total stats tracking for a clearer overview of overall performance.</li>
+                                <li>Introduced sales notifications so important updates are easier to catch in real time.</li>
+                            </ul>
+                        </div>
+                        <div class="update-entry" style="margin-top: 18px;">
+                            <div class="update-version" style="font-size: 13px; color: #8c9298; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Previous versions</div>
+                            <div class="update-entry">
+                                <div class="update-version">v5.1 <span class="update-date">2026-05-23</span></div>
+                                <ul>
+                                    <li>Version is active, but no dedicated update note is listed yet.</li>
+                                </ul>
+                            </div>
+                            <div class="update-entry">
+                                <div class="update-version">v5.0 <span class="update-date">2026-05-23</span></div>
+                                <ul>
+                                    <li>Added the forecast system with 30-day, 90-day, and 1-year sales growth estimates per group.</li>
+                                    <li>Added quick Forecast buttons in the tracker so the forecast page opens directly.</li>
+                                    <li>Improved grouped cache parsing for forecast analysis input.</li>
+                                </ul>
+                            </div>
+                            <div class="update-entry">
+                                <div class="update-version">v4.8 <span class="update-date">2026-05-22</span></div>
+                                <ul>
+                                    <li>Improved per-group analytics loading reliability.</li>
+                                    <li>Polished tracker dashboard behavior for settings and analytics actions.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <form id="settings-form">
+                <!-- Notifications Section -->
+                <div class="setting-section">
+                    <div class="setting-section-title">🔔 Desktop Notifications</div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showNotifications">
+                        <span>Show Chrome desktop notifications for new sales</span>
+                    </label>
+
+                    <div class="sub-options" id="notification-mode-container">
+                        <div style="font-weight: 600; font-size: 12px; color: #ffb800; margin-bottom: 8px;">Notification Frequency:</div>
+                        <label class="radio-option">
+                            <input type="radio" name="notificationMode" value="each" id="notif-mode-each" checked>
+                            <div>
+                                <div><b>Each sale</b> (Instant alert for every transaction)</div>
+                                <div class="radio-desc">Fires an immediate toast popup every time an item is sold.</div>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="notificationMode" value="every10" id="notif-mode-every10">
+                            <div>
+                                <div><b>Every 10 sales</b> (Milestone batch alert)</div>
+                                <div class="radio-desc">Batches notifications and alerts you each time you reach 10 new sales with total Robux earned.</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #313539; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <button type="button" class="btn-secondary" id="test-notification-btn" style="font-size: 13px; padding: 8px 16px;">🔔 Send Test Notification</button>
+                        <span id="test-notif-status" style="font-size: 12px; font-weight: 500;"></span>
+                    </div>
+                </div>
+
+                <!-- Display & Currency Section -->
+                <div class="setting-section">
+                    <div class="setting-section-title">💵 Display & Conversion</div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showConversion">
+                        <span>Show real money DevEx conversion</span>
+                    </label>
+                    <div class="field-group">
+                        <label for="currency">Conversion Currency:</label>
+                        <select id="currency">
+                            <option value="USD">USD ($) — DevEx $0.0038/R$</option>
+                            <option value="EUR">EUR (€) — DevEx €0.00325/R$</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Appearance & Timezone Section -->
+                <div class="setting-section">
+                    <div class="setting-section-title">🌍 Localization & Theme</div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="darkMode">
+                        <span>Enable dark mode</span>
+                    </label>
+                    <div class="field-group">
+                        <label for="timeZone">Analytics & EOD Time Zone:</label>
+                        <select id="timeZone">
+                            <option value="UTC">UTC (Coordinated Universal Time)</option>
+                            <option value="Europe/Berlin">Central European Time (CET/CEST)</option>
+                            <option value="Europe/London">London / GMT / BST</option>
+                            <option value="America/New_York">Eastern Time (EST/EDT)</option>
+                            <option value="America/Chicago">Central Time (CST/CDT)</option>
+                            <option value="America/Denver">Mountain Time (MST/MDT)</option>
+                            <option value="America/Los_Angeles">Pacific Time (PST/PDT)</option>
+                            <option value="Asia/Tokyo">Japan Standard Time (JST)</option>
+                            <option value="Asia/Singapore">Singapore Time (SGT)</option>
+                            <option value="Australia/Sydney">Australian Eastern Time (AET)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary">Save Settings</button>
+            </form>
+            <div id="status"></div>
+        </div>
+
+        <!-- Tab 2: Device Stats -->
+        <div class="tab-content" id="tab-content-stats">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <h1>Device-Wide Tracked Stats</h1>
+                    <p class="subtitle" style="margin-bottom: 12px;">Aggregated metrics and intelligence across all Roblox groups & accounts tracked on this browser.</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn-secondary" id="refresh-stats-btn">🔄 Refresh Stats</button>
+                    <button type="button" class="btn-green" id="open-analytics-from-stats-btn">📈 Open Analytics</button>
+                </div>
+            </div>
+
+            <!-- Main Metric Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-card-title">🛒 Total Tracked Sales</div>
+                    <div class="stat-card-value gold" id="stat-total-sales">0</div>
+                    <div class="stat-card-sub" id="stat-total-sales-sub">Across all entities</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">🟢 Total Robux Earned</div>
+                    <div class="stat-card-value green" id="stat-total-robux">R$ 0</div>
+                    <div class="stat-card-sub" id="stat-total-conversion">$0.00 USD</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">📅 Today's Combined Sales</div>
+                    <div class="stat-card-value" id="stat-today-robux">R$ 0</div>
+                    <div class="stat-card-sub" id="stat-today-count">0 sales today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">📈 Past 7 Days Combined</div>
+                    <div class="stat-card-value" id="stat-days7-robux">R$ 0</div>
+                    <div class="stat-card-sub" id="stat-days7-count">0 sales in 7 days</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">⏳ Total Pending Robux</div>
+                    <div class="stat-card-value blue" id="stat-total-pending">R$ 0</div>
+                    <div class="stat-card-sub">Robux currently in escrow</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">💰 Total Group Balances</div>
+                    <div class="stat-card-value" id="stat-total-balance">R$ 0</div>
+                    <div class="stat-card-sub">Available group funds</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">📊 Average Sale Price</div>
+                    <div class="stat-card-value" id="stat-avg-sale">R$ 0</div>
+                    <div class="stat-card-sub">Per transaction average</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">🐋 Largest Single Sale</div>
+                    <div class="stat-card-value gold" id="stat-highest-sale">R$ 0</div>
+                    <div class="stat-card-sub" id="stat-highest-sale-name">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">👥 Tracked Entities</div>
+                    <div class="stat-card-value" id="stat-entity-count">0</div>
+                    <div class="stat-card-sub" id="stat-entity-breakdown-sub">0 groups, 0 users</div>
+                </div>
+            </div>
+
+            <!-- Top Performing Assets -->
+            <h2>🏆 Top 5 Best-Selling Assets (Device-wide)</h2>
+            <div class="stats-table-wrapper">
+                <table class="stats-table" id="top-assets-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th>Asset / Item Name</th>
+                            <th style="text-align: right;">Sales</th>
+                            <th style="text-align: right;">Gross Robux</th>
+                            <th style="text-align: right;">% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="top-assets-tbody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: #8c9298; padding: 20px;">No sales data recorded yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Tracked Groups / Accounts -->
+            <h2>🏢 Tracked Groups & Accounts Breakdown</h2>
+            <div class="stats-table-wrapper">
+                <table class="stats-table" id="entities-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 90px;">Type</th>
+                            <th>Entity Name / ID</th>
+                            <th style="text-align: right;">Sales</th>
+                            <th style="text-align: right;">Total Robux</th>
+                            <th style="text-align: right;">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="entities-tbody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: #8c9298; padding: 20px;">No tracked groups or users found on this device.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
     <script src="settings.js"></script>
 </body>

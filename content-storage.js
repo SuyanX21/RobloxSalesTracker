@@ -90,6 +90,8 @@
             base.lastResetDate = typeof parsed.lastResetDate === 'string' ? parsed.lastResetDate : base.lastResetDate;
             base.lastResetTimeZone = typeof parsed.lastResetTimeZone === 'string' ? parsed.lastResetTimeZone : base.lastResetTimeZone;
             base.lastPruneTime = Math.max(0, toFiniteNumber(parsed.lastPruneTime, 0));
+            base.unnotifiedSalesCount = Math.max(0, Math.floor(toFiniteNumber(parsed.unnotifiedSalesCount, 0)));
+            base.unnotifiedSalesRobux = Math.max(0, toFiniteNumber(parsed.unnotifiedSalesRobux, 0));
             base.scanType = parsed.scanType === 'full' ? 'full' : 'new';
             base.processedIds = normalizeProcessedIds(parsed.processedIds);
 
@@ -119,7 +121,7 @@
                     return;
                 }
 
-                chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'darkMode', 'timeZone'], function (result) {
+                chrome.storage.local.get(['showConversion', 'currency', 'showNotifications', 'notificationMode', 'darkMode', 'timeZone'], function (result) {
                     var nextTimeZone = normalizeTimeZone(result.timeZone);
                     var previousResetTimeZone =
                         tracker.state && typeof tracker.state.lastResetTimeZone === 'string'
@@ -130,6 +132,7 @@
                         showConversion: result.showConversion !== false,
                         currency: result.currency || 'USD',
                         showNotifications: result.showNotifications === true,
+                        notificationMode: result.notificationMode === 'every10' ? 'every10' : 'each',
                         darkMode: result.darkMode === true,
                         timeZone: nextTimeZone
                     };
@@ -156,13 +159,51 @@
             }
 
             chrome.storage.onChanged.addListener(function (changes, areaName) {
-                if (areaName === 'local' && (changes.showConversion || changes.currency || changes.showNotifications || changes.darkMode || changes.timeZone)) {
+                if (areaName === 'local' && (changes.showConversion || changes.currency || changes.showNotifications || changes.notificationMode || changes.darkMode || changes.timeZone)) {
                     initializeSettings(onUpdated);
                 }
             });
         }
 
+        function loadCachedTransactions() {
+            var cacheKey = getAnalyticsCacheKey();
+            try {
+                var raw = localStorage.getItem(cacheKey);
+                if (raw) {
+                    var parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        tracker.cachedTransactions = parsed;
+                    }
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get([cacheKey], function (result) {
+                    if (result && result[cacheKey]) {
+                        var val = result[cacheKey];
+                        if (typeof val === 'string') {
+                            try { val = JSON.parse(val); } catch (e) { val = []; }
+                        }
+                        if (Array.isArray(val)) {
+                            tracker.cachedTransactions = val;
+                        }
+                    }
+                });
+            }
+        }
+
+        function getCachedTransactions() {
+            if (Array.isArray(tracker.cachedTransactions)) {
+                return tracker.cachedTransactions;
+            }
+            loadCachedTransactions();
+            return tracker.cachedTransactions || [];
+        }
+
         function loadState() {
+            loadCachedTransactions();
             var saved = null;
 
             try {
@@ -281,7 +322,7 @@
 
             function doSave(existingData) {
                 var existingTx = parseExistingTransactions(existingData);
-                var taggedTxs = transactionsToPersist.map(function(tx) {
+                var taggedTxs = transactionsToPersist.map(function (tx) {
                     return Object.assign({}, tx, {
                         groupId: groupId,
                         groupName: groupName
@@ -305,6 +346,7 @@
                 });
 
                 var trimmed = merged.slice(0, 10000);
+                tracker.cachedTransactions = trimmed;
 
                 if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                     var payload = {};
@@ -508,6 +550,8 @@
             resetState: resetState,
             saveState: saveState,
             saveTransactionsForAnalytics: saveTransactionsForAnalytics,
+            loadCachedTransactions: loadCachedTransactions,
+            getCachedTransactions: getCachedTransactions,
             startAnalyticsAutoSave: startAnalyticsAutoSave,
             prunePast7DaysCounters: prunePast7DaysCounters,
             fetchGroupCurrency: fetchGroupCurrency

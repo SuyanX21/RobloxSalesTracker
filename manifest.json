@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Roblox Sales Tracker",
-  "version": "4.8",
+  "version": "6.0",
   "description": "Standalone Roblox sales intelligence dashboard and real-time sales tracker with per-group analytics.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "notifications"],
   "icons": {
     "16": "images/icon16.png",
     "48": "images/icon48.png",
